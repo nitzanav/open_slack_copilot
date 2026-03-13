@@ -26,7 +26,7 @@
   - Exponential backoff from 1 day, expires after 3 weeks
   - Thee are two types of skills 
     - "reply skills" - will be selected when you are mentioned 
-    - "thread skills" - will be selected on threads or channel you chose to watch
+    - "channel watcher skills" - will be selected on channels you chose to watch
 - **Channel RAG** — build and use retrieval from channel data
   - Build RAG from my answers (all or specific channel)
   - Build RAG of a specific channel
@@ -52,13 +52,13 @@
   - **M1.4: Cross-channel RAG** — add to the system prompt 10 relevant from popular/related channels
     - If RAG missing → initiate, send ephemeral "Creating RAG for #X, #Y, #Z", wait for it
     - On installation, build RAG of popular threads
-- **M2: pre-filled drafts** - get updates on messages in threads you watch, check if there are any matching "thread skills" need to act and then send ephemeral message with the suggested draft.
-  - listen to messages via `slack_listener_with_threads.py`, filter message by channels that were subscribed via config, activate M1, send ephemeral message
-  - use case - watching support channel to supervise them via rules.
-- **M4: Auto-trigger** — draft on any unread thread update after mention
+- **M2: Auto-draft replies to mentions** — listen via `slack_listener_with_threads.py`, filter for messages where the user is @mentioned, use reply skills (progressive disclosure) to draft a reply, always drafts (falls back to default reply skill). Send ephemeral with suggested draft.
+  - reuses M1 flow with reply skills
+  - use case — user wants to draft answers for all their mentions
+- **M4: Watch channels and match skills** — listen to all messages in configured watch channels via `slack_listener_with_threads.py`, match "channel watcher skills" via progressive disclosure. Only acts when a skill matches (expected ~10% of messages). Send ephemeral with suggested draft.
 - **M5: Tool - mention people** - it might not need something special
-- **M6: Tool - send slack PM** - it might not need something special
-- **M7: skill scheduler** - user write `/copilot follow up` this will match a thread skill - Check once a day at 11am, and send PM to users that were mentioned in the thread and didn't do the required action (set emoji, reply, or confirm what was required)` the llm then will disclose the schedule tool to enable the llm to register a prompt to the tool with the thread id to next day.
+- **M6: Tool - send slack PM** — needs slack_api support for sending DMs, exposed as a LiteLLM tool for the LLM to call as a function
+- **M7: skill scheduler** - user write `/copilot follow up` this will match a channel watcher skill - Check once a day at 11am, and send PM to users that were mentioned in the thread and didn't do the required action (set emoji, reply, or confirm what was required)` the llm then will disclose the schedule tool to enable the llm to register a prompt to the tool with the thread id to next day.
 
 # Technical Design
 
@@ -210,6 +210,16 @@ docs/
 
 - **Open question** — summarize data before RAG insert or on fetch?
 
+
+## Future Milestones (notes)
+
+- **M8**: `/copilot watch #channel` — slash command to add channels to watch config YAML
+- **M9**: Smart RAG checkpoint — store last-indexed timestamp per channel, fetch only newer messages on restart (instead of always re-fetching from config checkpoint)
+- **M10**: Retry with backoff — silent retry on LLM/Slack API failures before showing error
+- **M11**: Replace hard-coded example threads file with RAG-sourced examples
+- **M12**: Auto-detect popular/related channels by volume/activity for cross-channel RAG
+- **M13**: Rate limiting for M4 watched channels — protect against skills matching too frequently
+- **M14**: Channel watcher skill channel filter — JSON file in skill folder to restrict skill to specific channels
 
 # How to execute tasks
 - **Per task flow** — vision → spec `.md` → STP with all edge cases → high-quality code per [coding standards](#coding-standards) → full unit tests with mocks → integration tests (mock only Slack API & LLM)
