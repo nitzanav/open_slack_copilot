@@ -1,6 +1,6 @@
-import os
-
 from slack_sdk import WebClient
+
+from config.config import settings
 
 _client: WebClient | None = None
 
@@ -8,7 +8,7 @@ _client: WebClient | None = None
 def get_client() -> WebClient:
     global _client
     if _client is None:
-        _client = WebClient(token=os.environ["SLACK_BOT_TOKEN"])
+        _client = WebClient(token=settings.slack_bot.token)
     return _client
 
 

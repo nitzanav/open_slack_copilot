@@ -1,16 +1,27 @@
 from pathlib import Path
 
-import yaml
+from dynaconf import Dynaconf, Validator
 
-_CONFIG_PATH = Path(__file__).parent / "default.yaml"
+_CONFIG_DIR = Path(__file__).parent
 
-
-def load() -> dict:
-    with open(_CONFIG_PATH) as f:
-        config = yaml.safe_load(f) or {}
-    config.setdefault("llm", {}).setdefault("model", "gpt-4o")
-    config.setdefault("rag", {}).setdefault("checkpoint_duration", "30d")
-    return config
+settings = Dynaconf(
+    settings_files=[
+        str(_CONFIG_DIR / "default.yaml"),
+        str(_CONFIG_DIR / ".local.yaml"),
+    ],
+    envvar_prefix="SLACK_COPILOT",
+    validators=[
+        Validator("slack_bot.token", must_exist=True, ne="",
+                  messages={"must_exist_true": "SLACK_BOT_TOKEN is required (set via .env, see README)",
+                            "operations": "SLACK_BOT_TOKEN must not be empty"}),
+        Validator("slack_bot.app_token", must_exist=True, ne="",
+                  messages={"must_exist_true": "SLACK_APP_TOKEN is required (set via .env, see README)",
+                            "operations": "SLACK_APP_TOKEN must not be empty"}),
+        Validator("llm.openai_api_key", must_exist=True, ne="",
+                  messages={"must_exist_true": "OPENAI_API_KEY is required (set via .env, see README)",
+                            "operations": "OPENAI_API_KEY must not be empty"}),
+    ],
+)
 
 
 def parse_duration_seconds(duration: str) -> float:

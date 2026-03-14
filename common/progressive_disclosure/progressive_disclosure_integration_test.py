@@ -27,11 +27,10 @@ class TestEndToEndSkillSelection:
             result = select_skills("reply", THREAD, "")
             assert result == ["Be warm and professional."]
 
-    @patch("core.slack_bot.load_config")
     @patch("core.slack_bot.slack_rag")
     @patch("core.slack_bot.llm_client")
     @patch("common.progressive_disclosure.progressive_disclosure.llm_client")
-    def test_slash_command_with_skills(self, mock_pd_llm, mock_bot_llm, mock_rag, mock_config, tmp_path):
+    def test_slash_command_with_skills(self, mock_pd_llm, mock_bot_llm, mock_rag, tmp_path):
         skill_dir = tmp_path / "reply"
         skill_dir.mkdir()
         (skill_dir / "code_review").mkdir()

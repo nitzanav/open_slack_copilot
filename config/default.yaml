@@ -1,5 +1,13 @@
+# Secrets are loaded from .env — see Configuration section in README.
+# Env vars: SLACK_BOT_TOKEN, SLACK_APP_TOKEN, OPENAI_API_KEY
+
+slack_bot:
+  token: "@format {env[SLACK_BOT_TOKEN]}"
+  app_token: "@format {env[SLACK_APP_TOKEN]}"
+
 llm:
   model: "gpt-4o"
+  openai_api_key: "@format {env[OPENAI_API_KEY]}"
 
 rag:
   checkpoint_duration: "30d"

@@ -7,7 +7,7 @@ from common.progressive_disclosure import progressive_disclosure
 from common.slack.slack_api import slack_api
 from common.slack.slack_bot import slack_listener, slack_listener_with_threads
 from common.slack.slack_rag import slack_rag
-from config.config import load as load_config, parse_duration_seconds
+from config.config import settings, parse_duration_seconds
 
 DEFAULT_INSTRUCTION = "Draft a reply to this thread."
 PROMPT_TEMPLATE = (Path(__file__).parent / "draft_prompt.md").read_text()
@@ -123,9 +123,8 @@ def _build_cross_channel_rags():
 
 
 def _start_periodic_rag_schedules():
-    config = load_config()
     checkpoint = _get_checkpoint_seconds()
-    for entry in config.get("rag", {}).get("slack", []):
+    for entry in settings.rag.slack:
         channel = entry.get("channel", "")
         update = entry.get("update", "")
         if not channel or not update:
@@ -144,13 +143,11 @@ def _parse_update_interval(update_str: str) -> float | None:
 
 
 def _get_cross_channel_ids() -> list[str]:
-    config = load_config()
-    return config.get("rag", {}).get("cross_channel", [])
+    return list(settings.rag.cross_channel)
 
 
 def _get_checkpoint_seconds() -> float:
-    config = load_config()
-    duration = config.get("rag", {}).get("checkpoint_duration", "30d")
+    duration = settings.rag.checkpoint_duration
     return parse_duration_seconds(duration)
 
 

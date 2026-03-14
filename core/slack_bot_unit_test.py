@@ -4,6 +4,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
+from config.config import settings
 from core.slack_bot import (
     compose_system_prompt, prepare_draft, _handle_copilot,
     _select_skills, _load_examples, _build_cross_channel_rags,
@@ -92,94 +93,97 @@ class TestLoadExamples:
 
 
 class TestCrossChannelRag:
-    @patch("core.slack_bot.load_config")
     @patch("core.slack_bot.slack_rag")
     @patch("core.slack_bot.slack_api")
-    def test_fetch_cross_channel_with_missing(self, mock_slack, mock_rag, mock_config):
-        mock_config.return_value = {"rag": {"cross_channel": ["eng", "prod"], "checkpoint_duration": "30d"}}
-        mock_rag.missing_channels.return_value = ["prod"]
-        mock_rag.query_cross_channel.return_value = [{"text": "cross result", "channel": "eng"}]
+    def test_fetch_cross_channel_with_missing(self, mock_slack, mock_rag):
+        original = list(settings.rag.cross_channel)
+        settings.set("rag.cross_channel", ["eng", "prod"])
+        try:
+            mock_rag.missing_channels.return_value = ["prod"]
+            mock_rag.query_cross_channel.return_value = [{"text": "cross result", "channel": "eng"}]
 
-        result = _fetch_cross_channel_rag("support", "T1", "U1", "deploy question")
+            result = _fetch_cross_channel_rag("support", "T1", "U1", "deploy question")
 
-        mock_slack.send_ephemeral.assert_called_once()
-        assert "prod" in mock_slack.send_ephemeral.call_args[0][3]
-        mock_rag.build.assert_called_once_with("prod", 2592000.0)
-        assert result == [{"text": "cross result", "channel": "eng"}]
+            mock_slack.send_ephemeral.assert_called_once()
+            assert "prod" in mock_slack.send_ephemeral.call_args[0][3]
+            mock_rag.build.assert_called_once_with("prod", 2592000.0)
+            assert result == [{"text": "cross result", "channel": "eng"}]
+        finally:
+            settings.set("rag.cross_channel", original)
 
-    @patch("core.slack_bot.load_config")
     @patch("core.slack_bot.slack_rag")
-    def test_no_cross_channel_config(self, mock_rag, mock_config):
-        mock_config.return_value = {"rag": {"cross_channel": []}}
+    def test_no_cross_channel_config(self, mock_rag):
         result = _fetch_cross_channel_rag("support", "T1", "U1", "context")
         assert result == []
         mock_rag.query_cross_channel.assert_not_called()
 
-    @patch("core.slack_bot.load_config")
     @patch("core.slack_bot.slack_rag")
-    def test_startup_builds_cross_channel(self, mock_rag, mock_config):
-        mock_config.return_value = {"rag": {"cross_channel": ["a", "b", "c"], "checkpoint_duration": "30d"}}
-        _build_cross_channel_rags()
-        mock_rag.build_all_missing.assert_called_once()
-        assert mock_rag.build_all_missing.call_args[0][0] == ["a", "b", "c"]
+    def test_startup_builds_cross_channel(self, mock_rag):
+        original = list(settings.rag.cross_channel)
+        settings.set("rag.cross_channel", ["a", "b", "c"])
+        try:
+            _build_cross_channel_rags()
+            mock_rag.build_all_missing.assert_called_once()
+            assert mock_rag.build_all_missing.call_args[0][0] == ["a", "b", "c"]
+        finally:
+            settings.set("rag.cross_channel", original)
 
 
 class TestPrepareDraft:
-    @patch("core.slack_bot.load_config")
     @patch("core.slack_bot.slack_rag")
     @patch("core.slack_bot.progressive_disclosure")
     @patch("core.slack_bot.llm_client")
     @patch("core.slack_bot.slack_api")
-    def test_full_draft_with_cross_channel(self, mock_slack, mock_llm, mock_pd, mock_rag, mock_config):
+    def test_full_draft_with_cross_channel(self, mock_slack, mock_llm, mock_pd, mock_rag):
         mock_pd.select_skills.return_value = []
         mock_pd.get_default_instruction.return_value = "default"
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = [{"text": "channel rag"}]
         mock_rag.missing_channels.return_value = []
         mock_rag.query_cross_channel.return_value = [{"text": "cross rag", "channel": "eng"}]
-        mock_config.return_value = {"rag": {"cross_channel": ["eng"], "checkpoint_duration": "30d"}}
         mock_llm.generate.return_value = "Full draft"
 
-        result = prepare_draft("support", "T1", "U1", THREAD_3, "")
-        assert result == "Full draft"
+        original = list(settings.rag.cross_channel)
+        settings.set("rag.cross_channel", ["eng"])
+        try:
+            result = prepare_draft("support", "T1", "U1", THREAD_3, "")
+            assert result == "Full draft"
 
-        prompt = mock_llm.generate.call_args[0][0]
-        assert "channel rag" in prompt
-        assert "cross rag" in prompt
+            prompt = mock_llm.generate.call_args[0][0]
+            assert "channel rag" in prompt
+            assert "cross rag" in prompt
+        finally:
+            settings.set("rag.cross_channel", original)
 
 
 class TestHandleCopilot:
-    @patch("core.slack_bot.load_config")
     @patch("core.slack_bot.slack_rag")
     @patch("core.slack_bot.progressive_disclosure")
     @patch("core.slack_bot.slack_api")
     @patch("core.slack_bot.llm_client")
-    def test_draft_sent_as_ephemeral(self, mock_llm, mock_slack, mock_pd, mock_rag, mock_config):
+    def test_draft_sent_as_ephemeral(self, mock_llm, mock_slack, mock_pd, mock_rag):
         mock_pd.select_skills.return_value = []
         mock_pd.get_default_instruction.return_value = "default"
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []
         mock_rag.query_cross_channel.return_value = []
-        mock_config.return_value = {"rag": {"cross_channel": [], "checkpoint_duration": "30d"}}
         mock_llm.generate.return_value = "Here is my draft"
 
         _handle_copilot("C123", "T123", "U001", "help", THREAD_3)
         mock_slack.send_ephemeral.assert_called_with("C123", "T123", "U001", "Here is my draft")
 
-    @patch("core.slack_bot.load_config")
     @patch("core.slack_bot.slack_rag")
     @patch("core.slack_bot.progressive_disclosure")
     @patch("core.slack_bot.slack_api")
     @patch("core.slack_bot.llm_client")
-    def test_llm_error_sends_error_ephemeral(self, mock_llm, mock_slack, mock_pd, mock_rag, mock_config):
+    def test_llm_error_sends_error_ephemeral(self, mock_llm, mock_slack, mock_pd, mock_rag):
         mock_pd.select_skills.return_value = []
         mock_pd.get_default_instruction.return_value = "default"
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []
         mock_rag.query_cross_channel.return_value = []
-        mock_config.return_value = {"rag": {"cross_channel": [], "checkpoint_duration": "30d"}}
         mock_llm.generate.side_effect = Exception("LLM down")
 
         _handle_copilot("C123", "T123", "U001", "", THREAD_3)
