@@ -2,6 +2,7 @@ import json
 import re
 from pathlib import Path
 
+from common.log import log
 from common.llm.llm_client import llm_client
 from common.progressive_disclosure import progressive_disclosure
 from common.slack.slack_api import slack_api
@@ -26,6 +27,7 @@ def start():
         slack_rag.stop_scheduler()
 
 
+@log
 def _handle_copilot(channel_id: str, thread_ts: str, user_id: str,
                     user_text: str, thread_messages: list[dict]):
     try:
