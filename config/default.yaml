@@ -1,0 +1,7 @@
+llm:
+  model: "gpt-4o"
+
+rag:
+  checkpoint_duration: "30d"
+  cross_channel: []
+  slack: []
