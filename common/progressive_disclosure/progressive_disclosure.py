@@ -5,7 +5,8 @@ from common.log import log
 from common.llm.llm_client import llm_client
 
 SKILLS_ROOT = Path.home() / ".open_slack_copilot" / "skills"
-DEFAULT_INSTRUCTION = (Path(__file__).parent / "default_reply_instruction.md").read_text().strip()
+_BUNDLED_DEFAULT_INSTRUCTION = (Path(__file__).parent / "default_reply_instruction.md").read_text().strip()
+USER_DEFAULT_INSTRUCTION_PATH = Path.home() / ".open_slack_copilot" / "reply_skills" / "default.md"
 
 SELECTION_PROMPT = (
     "You are selecting relevant skills for drafting a Slack reply.\n"
@@ -34,7 +35,9 @@ def select_skills(skill_type: str, thread_messages: list[dict], user_text: str) 
 
 
 def get_default_instruction() -> str:
-    return DEFAULT_INSTRUCTION
+    if USER_DEFAULT_INSTRUCTION_PATH.is_file():
+        return USER_DEFAULT_INSTRUCTION_PATH.read_text().strip()
+    return _BUNDLED_DEFAULT_INSTRUCTION
 
 
 def _load_skill_titles(skills_dir: Path) -> list[str]:

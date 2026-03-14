@@ -6,7 +6,7 @@ import pytest
 
 from common.progressive_disclosure.progressive_disclosure import (
     select_skills, get_default_instruction, _load_skill_titles, _parse_selection,
-    DEFAULT_INSTRUCTION,
+    _BUNDLED_DEFAULT_INSTRUCTION,
 )
 
 FIXTURES = Path(__file__).parent.parent.parent / "tests" / "fixtures"
@@ -113,8 +113,21 @@ class TestSelectSkills:
 
 
 class TestGetDefaultInstruction:
-    def test_returns_nonempty(self):
-        assert len(get_default_instruction()) > 0
+    def test_returns_bundled_when_no_user_override(self, tmp_path):
+        missing = tmp_path / "no_such_file.md"
+        with patch("common.progressive_disclosure.progressive_disclosure.USER_DEFAULT_INSTRUCTION_PATH", missing):
+            result = get_default_instruction()
+            assert result == _BUNDLED_DEFAULT_INSTRUCTION
+            assert len(result) > 0
 
-    def test_matches_file_content(self):
-        assert get_default_instruction() == DEFAULT_INSTRUCTION
+    def test_user_override_takes_precedence(self, tmp_path):
+        override = tmp_path / "default.md"
+        override.write_text("  Custom user instruction  \n")
+        with patch("common.progressive_disclosure.progressive_disclosure.USER_DEFAULT_INSTRUCTION_PATH", override):
+            assert get_default_instruction() == "Custom user instruction"
+
+    def test_user_override_ignores_directory(self, tmp_path):
+        dir_path = tmp_path / "default.md"
+        dir_path.mkdir()
+        with patch("common.progressive_disclosure.progressive_disclosure.USER_DEFAULT_INSTRUCTION_PATH", dir_path):
+            assert get_default_instruction() == _BUNDLED_DEFAULT_INSTRUCTION
