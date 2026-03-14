@@ -1,4 +1,5 @@
 import os
+import sys
 
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
@@ -10,4 +11,8 @@ def create_app() -> App:
 
 def start(app: App):
     handler = SocketModeHandler(app, os.environ["SLACK_APP_TOKEN"])
-    handler.start()
+    try:
+        handler.start()
+    except KeyboardInterrupt:
+        handler.close()
+        sys.exit(0)

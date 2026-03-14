@@ -1,6 +1,5 @@
 import time
 import threading
-from typing import Callable
 
 from common.llm.llm_client import llm_client
 from common.rag import rag
@@ -53,7 +52,7 @@ def build_all_missing(channel_ids: list[str], checkpoint_seconds: float = 30 * 8
     threads = []
     for ch_id in channel_ids:
         if not is_ready(ch_id):
-            t = threading.Thread(target=_safe_build, args=(ch_id, checkpoint_seconds))
+            t = threading.Thread(target=_safe_build, args=(ch_id, checkpoint_seconds), daemon=True)
             t.start()
             threads.append(t)
     return threads

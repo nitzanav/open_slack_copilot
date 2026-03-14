@@ -19,7 +19,10 @@ def start():
     slack_listener_with_threads.register_copilot_command(app, _handle_copilot)
     _build_cross_channel_rags()
     _start_periodic_rag_schedules()
-    slack_listener.start(app)
+    try:
+        slack_listener.start(app)
+    finally:
+        slack_rag.stop_scheduler()
 
 
 def _handle_copilot(channel_id: str, thread_ts: str, user_id: str,
