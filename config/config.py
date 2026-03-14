@@ -1,4 +1,18 @@
+import os
 from pathlib import Path
+
+# Load .env before Dynaconf so secrets are available when parsing @format {env[...]}
+try:
+    from dotenv import load_dotenv
+    _root = Path(__file__).resolve().parent.parent
+    load_dotenv(_root / ".env")
+except ImportError:
+    pass
+
+# Ensure required env keys exist so @format {env[KEY]} doesn't raise KeyError.
+# Validators will report a proper validation error message if missing or empty.
+for _key in ("SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "OPENAI_API_KEY"):
+    os.environ.setdefault(_key, "")
 
 from dynaconf import Dynaconf, Validator
 
@@ -13,13 +27,13 @@ settings = Dynaconf(
     validators=[
         Validator("slack_bot.token", must_exist=True, ne="",
                   messages={"must_exist_true": "SLACK_BOT_TOKEN is required (set via .env, see README)",
-                            "operations": "SLACK_BOT_TOKEN must not be empty"}),
+                            "operations": "SLACK_BOT_TOKEN is required (set via .env, see README)"}),
         Validator("slack_bot.app_token", must_exist=True, ne="",
                   messages={"must_exist_true": "SLACK_APP_TOKEN is required (set via .env, see README)",
-                            "operations": "SLACK_APP_TOKEN must not be empty"}),
+                            "operations": "SLACK_APP_TOKEN is required (set via .env, see README)"}),
         Validator("llm.openai_api_key", must_exist=True, ne="",
                   messages={"must_exist_true": "OPENAI_API_KEY is required (set via .env, see README)",
-                            "operations": "OPENAI_API_KEY must not be empty"}),
+                            "operations": "OPENAI_API_KEY is required (set via .env, see README)"}),
     ],
 )
 
