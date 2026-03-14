@@ -6,7 +6,7 @@ from common.llm.llm_client import llm_client
 
 SKILLS_ROOT = Path.home() / ".open_slack_copilot" / "skills"
 _BUNDLED_DEFAULT_INSTRUCTION = (Path(__file__).parent / "default_reply_instruction.md").read_text().strip()
-USER_DEFAULT_INSTRUCTION_PATH = Path.home() / ".open_slack_copilot" / "reply_skills" / "default.md"
+USER_DEFAULT_INSTRUCTION_PATH = Path.home() / ".open_slack_copilot" / "skills" / "reply" / "default.md"
 
 SELECTION_PROMPT = (
     "You are selecting relevant skills for drafting a Slack reply.\n"

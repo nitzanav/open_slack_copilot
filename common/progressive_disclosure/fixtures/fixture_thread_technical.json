@@ -1,0 +1,4 @@
+[
+  {"user": "U1", "ts": "1234567890.000001", "text": "Can someone review the database migration script?"},
+  {"user": "U2", "ts": "1234567890.000002", "text": "I've attached it. Looking for feedback on the indexes."}
+]
