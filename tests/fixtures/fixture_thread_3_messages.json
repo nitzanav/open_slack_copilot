@@ -1,0 +1,5 @@
+[
+  {"user": "U001", "text": "Has anyone tested the new deployment pipeline?", "ts": "1700000001.000001"},
+  {"user": "U002", "text": "I ran it yesterday, hit an issue with the staging env", "ts": "1700000002.000002"},
+  {"user": "U003", "text": "Same here — looks like the config for staging is outdated", "ts": "1700000003.000003"}
+]
