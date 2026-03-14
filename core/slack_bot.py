@@ -1,9 +1,15 @@
+import json
+from pathlib import Path
+
 from common.llm.llm_client import llm_client
 from common.progressive_disclosure import progressive_disclosure
 from common.slack.slack_api import slack_api
 from common.slack.slack_bot import slack_listener, slack_listener_with_threads
+from common.slack.slack_rag import slack_rag
+from config.config import load as load_config, parse_duration_seconds
 
 DEFAULT_INSTRUCTION = "Draft a reply to this thread."
+EXAMPLES_PATH = Path(__file__).parent / "example_threads.json"
 
 
 def start():
@@ -15,7 +21,7 @@ def start():
 def _handle_copilot(channel_id: str, thread_ts: str, user_id: str,
                     user_text: str, thread_messages: list[dict]):
     try:
-        draft = prepare_draft(thread_messages, user_text)
+        draft = prepare_draft(channel_id, thread_ts, user_id, thread_messages, user_text)
         slack_api.send_ephemeral(channel_id, thread_ts, user_id, draft)
     except Exception:
         slack_api.send_ephemeral(
@@ -23,19 +29,30 @@ def _handle_copilot(channel_id: str, thread_ts: str, user_id: str,
         )
 
 
-def prepare_draft(thread_messages: list[dict], user_text: str) -> str:
+def prepare_draft(channel_id: str, thread_ts: str, user_id: str,
+                  thread_messages: list[dict], user_text: str) -> str:
     skills = _select_skills(thread_messages, user_text)
-    prompt = compose_system_prompt(thread_messages, user_text, skills)
+    rag_results = _fetch_rag_context(channel_id, thread_ts, user_id, thread_messages)
+    examples = _load_examples()
+    prompt = compose_system_prompt(thread_messages, user_text, skills, rag_results, examples)
     return llm_client.generate(prompt)
 
 
 def compose_system_prompt(thread_messages: list[dict], user_text: str,
-                          skills: list[str] | None = None) -> str:
+                          skills: list[str] | None = None,
+                          rag_results: list[dict] | None = None,
+                          examples: list[dict] | None = None) -> str:
     thread_block = _format_thread(thread_messages)
     instruction = user_text.strip() if user_text.strip() else DEFAULT_INSTRUCTION
     parts = ["You are a helpful assistant drafting a Slack reply."]
     if skills:
         parts.append("## Skills\n" + "\n\n".join(skills))
+    if rag_results:
+        rag_block = "\n".join(f"- {r.get('text', '')}" for r in rag_results)
+        parts.append(f"## Relevant Channel Context\n{rag_block}")
+    if examples:
+        ex_block = "\n".join(f"Q: {e['question']}\nA: {e['answer']}" for e in examples)
+        parts.append(f"## Example Replies\n{ex_block}")
     parts.append(f"## Thread\n{thread_block}")
     parts.append(f"## Instruction\n{instruction}")
     return "\n\n".join(parts)
@@ -46,6 +63,35 @@ def _select_skills(thread_messages: list[dict], user_text: str) -> list[str]:
     if not skills:
         return [progressive_disclosure.get_default_instruction()]
     return skills
+
+
+def _fetch_rag_context(channel_id: str, thread_ts: str, user_id: str,
+                       thread_messages: list[dict]) -> list[dict]:
+    try:
+        if not slack_rag.is_ready(channel_id):
+            slack_api.send_ephemeral(
+                channel_id, thread_ts, user_id,
+                "Preparing RAG for this channel, will update when done."
+            )
+            checkpoint = _get_checkpoint_seconds()
+            slack_rag.build(channel_id, checkpoint)
+
+        thread_context = " ".join(m.get("text", "") for m in thread_messages[-5:])
+        return slack_rag.query_channel(channel_id, thread_context)
+    except Exception:
+        return []
+
+
+def _get_checkpoint_seconds() -> float:
+    config = load_config()
+    duration = config.get("rag", {}).get("checkpoint_duration", "30d")
+    return parse_duration_seconds(duration)
+
+
+def _load_examples() -> list[dict]:
+    if not EXAMPLES_PATH.exists():
+        return []
+    return json.loads(EXAMPLES_PATH.read_text())
 
 
 def _format_thread(messages: list[dict]) -> str:
