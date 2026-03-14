@@ -1,5 +1,7 @@
 # M1.3 — Channel RAG
 
+[← Back to PRD](../../PRD.md)
+
 ## Requirements
 
 - **Retrieve 10 relevant messages** — from current channel's RAG, summarized, added to system prompt

@@ -1,5 +1,7 @@
 # M6 — Tool: Send Slack PM
 
+[← Back to PRD](../../PRD.md)
+
 ## Requirements
 
 - **Slack API for DMs** — `slack_api` supports `send_dm(user_id, text)` to send direct messages

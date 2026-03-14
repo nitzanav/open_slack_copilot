@@ -1,5 +1,7 @@
 # M5 — Tool: Mention People
 
+[← Back to PRD](../../PRD.md)
+
 ## Requirements
 
 - **Resolve user IDs** — provide the LLM with a `resolve_user(display_name)` capability so it can output `<@USER_ID>` format in drafts

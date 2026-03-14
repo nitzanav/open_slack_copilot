@@ -1,5 +1,7 @@
 # M7 — Skill Scheduler
 
+[← Back to PRD](../../PRD.md)
+
 ## Requirements
 
 - **Register scheduled prompts** — when user invokes `/copilot follow up` (or similar), the LLM matches a channel watcher skill that requires scheduling, then uses the `schedule` tool to register a recurring prompt

@@ -1,5 +1,7 @@
 # M1.1 — Thread Draft via `/copilot`
 
+[← Back to PRD](../../PRD.md)
+
 ## Requirements
 
 - **Listen** to `/copilot <optional text>` slash command in any channel/thread

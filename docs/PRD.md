@@ -1,5 +1,7 @@
 # Open Slack CoPilot
 
+[← Back to README](../README.md)
+
 # Product Requirements
 
 ## Terms
@@ -36,29 +38,30 @@
   - e.g. followup reminders need periodic scan to decide if to remind
 
 ## `slack_bot.py` Milestones
+
 - **M1: Slash command** to compose response draft 
-  - M1.1: only thread data and the text after slash command
+  - [M1.1: only thread data and the text after slash command](milestones/m1_slash_command/m1_1_thread_draft.md)
     - listen `/copilot` via `slack_listener_with_threads.py`
     - `prepare_draft_order(thread)`
       - Compose system prompt
       - Edit the draft order
       - Send as ephemeral in same channel
       - System prompt includes the thread context
-  - **M1.2: Reply skills** — add relevant reply skills (progressive disclosure) to the context 
-  - **M1.3: Channel RAG** — add to the system prompt 10 most relevant *summarized* messages from current channel via RAG
+  - [M1.2: Reply skills](milestones/m1_slash_command/m1_2_reply_skills.md) — add relevant reply skills (progressive disclosure) to the context 
+  - [M1.3: Channel RAG](milestones/m1_slash_command/m1_3_channel_rag.md) — add to the system prompt 10 most relevant *summarized* messages from current channel via RAG
     - If RAG config missing → initiate preparation, send ephemeral "Preparing RAG for #X, will update when done"
     - Send draft ephemeral when RAG ready
     - Add hard-coded file of example threads & answers
-  - **M1.4: Cross-channel RAG** — add to the system prompt 10 relevant from popular/related channels
+  - [M1.4: Cross-channel RAG](milestones/m1_slash_command/m1_4_cross_channel_rag.md) — add to the system prompt 10 relevant from popular/related channels
     - If RAG missing → initiate, send ephemeral "Creating RAG for #X, #Y, #Z", wait for it
     - On installation, build RAG of popular threads
-- **M2: Auto-draft replies to mentions** — listen via `slack_listener_with_threads.py`, filter for messages where the user is @mentioned, use reply skills (progressive disclosure) to draft a reply, always drafts (falls back to default reply skill). Send ephemeral with suggested draft.
+- [**M2: Auto-draft replies to mentions**](milestones/m2_auto_draft_mentions/m2_auto_draft_mentions.md) — listen via `slack_listener_with_threads.py`, filter for messages where the user is @mentioned, use reply skills (progressive disclosure) to draft a reply, always drafts (falls back to default reply skill). Send ephemeral with suggested draft.
   - reuses M1 flow with reply skills
   - use case — user wants to draft answers for all their mentions
-- **M4: Watch channels and match skills** — listen to all messages in configured watch channels via `slack_listener_with_threads.py`, match "channel watcher skills" via progressive disclosure. Only acts when a skill matches (expected ~10% of messages). Send ephemeral with suggested draft.
-- **M5: Tool - mention people** - it might not need something special
-- **M6: Tool - send slack PM** — needs slack_api support for sending DMs, exposed as a LiteLLM tool for the LLM to call as a function
-- **M7: skill scheduler** - user write `/copilot follow up` this will match a channel watcher skill - Check once a day at 11am, and send PM to users that were mentioned in the thread and didn't do the required action (set emoji, reply, or confirm what was required)` the llm then will disclose the schedule tool to enable the llm to register a prompt to the tool with the thread id to next day.
+- [**M4: Watch channels and match skills**](milestones/m4_watch_channels_match_skills/m4_watch_channels_match_skills.md) — listen to all messages in configured watch channels via `slack_listener_with_threads.py`, match "channel watcher skills" via progressive disclosure. Only acts when a skill matches (expected ~10% of messages). Send ephemeral with suggested draft.
+- [**M5: Tool - mention people**](milestones/m5_mention_people/m5_mention_people.md) - it might not need something special
+- [**M6: Tool - send slack PM**](milestones/m6_send_slack_pm/m6_send_slack_pm.md) — needs slack_api support for sending DMs, exposed as a LiteLLM tool for the LLM to call as a function
+- [**M7: skill scheduler**](milestones/m7_skill_scheduler/m7_skill_scheduler.md) - user write `/copilot follow up` this will match a channel watcher skill - Check once a day at 11am, and send PM to users that were mentioned in the thread and didn't do the required action (set emoji, reply, or confirm what was required)` the llm then will disclose the schedule tool to enable the llm to register a prompt to the tool with the thread id to next day.
 
 # Technical Design
 

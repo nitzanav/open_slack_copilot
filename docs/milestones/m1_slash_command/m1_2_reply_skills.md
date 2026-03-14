@@ -1,5 +1,7 @@
 # M1.2 — Reply Skills (Progressive Disclosure)
 
+[← Back to PRD](../../PRD.md)
+
 ## Requirements
 
 - **Load reply skills** — read all skills from `~/.open_slack_copilot/skills/reply/<id>/SKILL.md`

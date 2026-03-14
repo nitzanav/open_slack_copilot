@@ -173,3 +173,7 @@ def _format_thread(messages: list[dict]) -> str:
         f"<@{m.get('user', 'unknown')}>: {m.get('text', '')}"
         for m in messages
     )
+
+
+if __name__ == "__main__":
+    start()

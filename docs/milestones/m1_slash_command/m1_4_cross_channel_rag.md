@@ -1,5 +1,7 @@
 # M1.4 — Cross-Channel RAG
 
+[← Back to PRD](../../PRD.md)
+
 ## Requirements
 
 - **Retrieve 10 relevant messages from other channels** — from popular/related channels, added to system prompt alongside channel RAG results

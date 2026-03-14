@@ -1,5 +1,7 @@
 # M4 — Watch Channels and Match Skills
 
+[← Back to PRD](../../PRD.md)
+
 ## Requirements
 
 - **Listen to all messages** in configured watch channels via `slack_listener_with_threads.py` (Socket Mode)

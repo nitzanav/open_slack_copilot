@@ -1,5 +1,7 @@
 # M2 — Auto-Draft Replies to Mentions
 
+[← Back to PRD](../../PRD.md)
+
 ## Requirements
 
 - **Listen for @mentions** — via `slack_listener_with_threads.py` (Socket Mode), detect when the configured user is @mentioned in any public channel
