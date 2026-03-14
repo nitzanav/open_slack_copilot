@@ -1,3 +1,6 @@
+import ssl
+
+import certifi
 from slack_sdk import WebClient
 
 from config.config import settings
@@ -5,10 +8,14 @@ from config.config import settings
 _client: WebClient | None = None
 
 
+def _ssl_context() -> ssl.SSLContext:
+    return ssl.create_default_context(cafile=certifi.where())
+
+
 def get_client() -> WebClient:
     global _client
     if _client is None:
-        _client = WebClient(token=settings.slack_bot.token)
+        _client = WebClient(token=settings.slack_bot.token, ssl=_ssl_context())
     return _client
 
 
