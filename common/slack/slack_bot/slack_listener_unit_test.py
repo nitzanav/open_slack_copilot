@@ -92,9 +92,7 @@ class TestRegisterCopilotShortcut:
     def test_registers_message_shortcut(self, mock_slack_api):
         app = MagicMock()
         register_copilot_shortcut(app, MagicMock())
-        app.shortcut.assert_called_once_with(
-            {"callback_id": "draft_with_copilot", "type": "message_action"}
-        )
+        app.shortcut.assert_called_once_with("draft_with_copilot")
 
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
     def test_shortcut_handler_called_with_thread_data(self, mock_slack_api):

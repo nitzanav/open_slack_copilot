@@ -120,6 +120,4 @@ class TestMessageShortcutEndToEnd:
 
         app = MagicMock()
         register_copilot_shortcut(app, MagicMock())
-        app.shortcut.assert_called_with(
-            {"callback_id": "draft_with_copilot", "type": "message_action"}
-        )
+        app.shortcut.assert_called_with("draft_with_copilot")

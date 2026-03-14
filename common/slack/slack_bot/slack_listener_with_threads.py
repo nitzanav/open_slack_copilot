@@ -21,7 +21,7 @@ def register_copilot_command(app: App, handler):
         try:
             thread_messages = slack_api.read_thread(channel_id, thread_ts)
         except Exception:
-            slack_api.send_ephemeral(channel_id, thread_ts, user_id, "Add me to this channel first.")
+            slack_api.send_ephemeral(channel_id, thread_ts, user_id, "Add me to this channel first. /invite @CoPilot")
             return
 
         handler(
@@ -35,7 +35,7 @@ def register_copilot_command(app: App, handler):
 
 def register_copilot_shortcut(app: App, handler):
 
-    @app.shortcut({"callback_id": "draft_with_copilot", "type": "message_action"})
+    @app.shortcut("draft_with_copilot")
     @log
     def handle_draft_shortcut(ack, shortcut, client):
         ack()
@@ -66,14 +66,14 @@ def _extract_thread_ts(command: dict) -> str | None:
 
 def _send_channel_error(channel_id: str, thread_ts: str, user_id: str,
                        response_url: str | None):
-    msg = "Add me to this channel first."
+    msg = "Add me to this channel first. /invite @CoPilot"
+    try:
+        slack_api.send_ephemeral(channel_id, thread_ts, user_id, msg)
+        return
+    except Exception:
+        pass
     if response_url:
         try:
             slack_api.respond_ephemeral(response_url, msg)
-            return
         except Exception:
             pass
-    try:
-        slack_api.send_ephemeral(channel_id, thread_ts, user_id, msg)
-    except Exception:
-        pass
