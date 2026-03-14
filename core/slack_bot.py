@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 from common.llm.llm_client import llm_client
@@ -9,6 +10,7 @@ from common.slack.slack_rag import slack_rag
 from config.config import load as load_config, parse_duration_seconds
 
 DEFAULT_INSTRUCTION = "Draft a reply to this thread."
+PROMPT_TEMPLATE = (Path(__file__).parent / "draft_prompt.md").read_text()
 EXAMPLES_PATH = Path(__file__).parent / "example_threads.json"
 
 
@@ -49,23 +51,18 @@ def compose_system_prompt(thread_messages: list[dict], user_text: str,
                           rag_results: list[dict] | None = None,
                           cross_rag_results: list[dict] | None = None,
                           examples: list[dict] | None = None) -> str:
-    thread_block = _format_thread(thread_messages)
-    instruction = user_text.strip() if user_text.strip() else DEFAULT_INSTRUCTION
-    parts = ["You are a helpful assistant drafting a Slack reply."]
-    if skills:
-        parts.append("## Skills\n" + "\n\n".join(skills))
-    if rag_results:
-        rag_block = "\n".join(f"- {r.get('text', '')}" for r in rag_results)
-        parts.append(f"## Relevant Channel Context\n{rag_block}")
-    if cross_rag_results:
-        cross_block = "\n".join(f"- [{r.get('channel', '?')}] {r.get('text', '')}" for r in cross_rag_results)
-        parts.append(f"## Cross-Channel Context\n{cross_block}")
-    if examples:
-        ex_block = "\n".join(f"Q: {e['question']}\nA: {e['answer']}" for e in examples)
-        parts.append(f"## Example Replies\n{ex_block}")
-    parts.append(f"## Thread\n{thread_block}")
-    parts.append(f"## Instruction\n{instruction}")
-    return "\n\n".join(parts)
+    rendered = PROMPT_TEMPLATE.format(
+        skills=_format_section("Skills", "\n\n".join(skills)) if skills else "",
+        channel_context=_format_section("Relevant Channel Context",
+            "\n".join(f"- {r.get('text', '')}" for r in rag_results)) if rag_results else "",
+        cross_channel_context=_format_section("Cross-Channel Context",
+            "\n".join(f"- [{r.get('channel', '?')}] {r.get('text', '')}" for r in cross_rag_results)) if cross_rag_results else "",
+        examples=_format_section("Example Replies",
+            "\n".join(f"Q: {e['question']}\nA: {e['answer']}" for e in examples)) if examples else "",
+        thread=_format_thread(thread_messages),
+        instruction=user_text.strip() if user_text.strip() else DEFAULT_INSTRUCTION,
+    )
+    return _collapse_blank_lines(rendered)
 
 
 def _select_skills(thread_messages: list[dict], user_text: str) -> list[str]:
@@ -158,6 +155,14 @@ def _load_examples() -> list[dict]:
     if not EXAMPLES_PATH.exists():
         return []
     return json.loads(EXAMPLES_PATH.read_text())
+
+
+def _format_section(title: str, body: str) -> str:
+    return f"## {title}\n{body}"
+
+
+def _collapse_blank_lines(text: str) -> str:
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
 
 
 def _format_thread(messages: list[dict]) -> str:
