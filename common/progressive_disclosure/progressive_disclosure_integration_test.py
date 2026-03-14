@@ -42,7 +42,6 @@ class TestEndToEndSkillSelection:
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []
         mock_rag.query_cross_channel.return_value = []
-        mock_config.return_value = {"rag": {"cross_channel": [], "checkpoint_duration": "30d"}}
 
         with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
             from core.slack_bot import prepare_draft
