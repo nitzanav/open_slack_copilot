@@ -2,9 +2,11 @@ import os
 
 import litellm
 
+from common.log import log
 from config.config import settings
 
 
+@log
 def generate(system_prompt: str, user_prompt: str = "") -> str:
     os.environ["OPENAI_API_KEY"] = settings.llm.openai_api_key
     model = settings.llm.model

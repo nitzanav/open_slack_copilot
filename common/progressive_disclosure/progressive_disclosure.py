@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from common.log import log
 from common.llm.llm_client import llm_client
 
 SKILLS_ROOT = Path.home() / ".open_slack_copilot" / "skills"
@@ -16,6 +17,7 @@ SELECTION_PROMPT = (
 )
 
 
+@log
 def select_skills(skill_type: str, thread_messages: list[dict], user_text: str) -> list[str]:
     skills_dir = SKILLS_ROOT / skill_type
     titles = _load_skill_titles(skills_dir)

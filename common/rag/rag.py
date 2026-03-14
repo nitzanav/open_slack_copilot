@@ -2,6 +2,8 @@ import threading
 import uuid
 
 from fastembed import TextEmbedding
+
+from common.log import log
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
 
@@ -64,6 +66,7 @@ def insert(collection: str, documents: list[dict]):
     get_client().upsert(collection_name=collection, points=points)
 
 
+@log
 def query(collection: str, query_text: str, top_k: int = 10,
           filters: dict | None = None) -> list[dict]:
     if not collection_exists(collection):

@@ -1,4 +1,6 @@
+import json
 import ssl
+import urllib.request
 
 import certifi
 from slack_sdk import WebClient
@@ -40,3 +42,15 @@ def send_ephemeral(channel_id: str, thread_ts: str, user_id: str, text: str):
     get_client().chat_postEphemeral(
         channel=channel_id, thread_ts=thread_ts, user=user_id, text=text
     )
+
+
+def respond_ephemeral(response_url: str, text: str):
+    """Post ephemeral message via response_url (works when bot is not in channel)."""
+    body = json.dumps({"text": text, "response_type": "ephemeral"}).encode()
+    req = urllib.request.Request(
+        response_url,
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    urllib.request.urlopen(req)

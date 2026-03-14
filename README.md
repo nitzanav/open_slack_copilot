@@ -24,6 +24,7 @@ pip install -r requirements.txt
 2. Choose **From a manifest** and select your workspace.
 3. Switch the format selector to **JSON** and paste the manifest below.
 4. Click **Create** and then **Install to Workspace** when prompted.
+5. **Install App on workspace**: OAuth & Permissions → OAuth Tokens → Install
 
 #### Slack App Manifest (JSON)
 
@@ -37,6 +38,14 @@ Paste this when creating the app from a manifest:
     "background_color": "#1a1a2e"
   },
   "features": {
+    "shortcuts": [
+      {
+        "name": "Draft with CoPilot",
+        "type": "message",
+        "callback_id": "draft_with_copilot",
+        "description": "Draft a reply for this message"
+      }
+    ],
     "bot_user": {
       "display_name": "CoPilot",
       "always_online": true
@@ -78,11 +87,11 @@ Paste this when creating the app from a manifest:
 
 After creating and installing the app, collect three tokens:
 
-| Variable | Where to find it | Format |
-|---|---|---|
-| `SLACK_BOT_TOKEN` | **OAuth & Permissions** → Bot User OAuth Token | `xoxb-...` |
+| Variable | Where to find it                                                                 | Format |
+|---|----------------------------------------------------------------------------------|---|
+| `SLACK_BOT_TOKEN` | **OAuth & Permissions** → Bot User OAuth Token          | `xoxb-...` |
 | `SLACK_APP_TOKEN` | **Basic Information** → App-Level Tokens → Generate (scope: `connections:write`) | `xapp-...` |
-| `OPENAI_API_KEY` | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) | `sk-...` |
+| `OPENAI_API_KEY` | [platform.openai.com/api-keys](https://platform.openai.com/api-keys)             | `sk-...` |
 
 **Getting each token:**
 

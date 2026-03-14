@@ -17,6 +17,7 @@ EXAMPLES_PATH = Path(__file__).parent / "example_threads.json"
 def start():
     app = slack_listener.create_app()
     slack_listener_with_threads.register_copilot_command(app, _handle_copilot)
+    slack_listener_with_threads.register_copilot_shortcut(app, _handle_copilot)
     _build_cross_channel_rags()
     _start_periodic_rag_schedules()
     try:

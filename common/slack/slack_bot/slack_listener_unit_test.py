@@ -1,11 +1,20 @@
 from unittest.mock import patch, MagicMock
 
-from common.slack.slack_bot.slack_listener_with_threads import register_copilot_command, _extract_thread_ts
+from common.slack.slack_bot.slack_listener_with_threads import (
+    register_copilot_command,
+    register_copilot_shortcut,
+    _extract_thread_ts,
+)
 
 
 def _get_registered_handler(app: MagicMock):
     """Extract the function passed to @app.command("/copilot") decorator."""
     return app.command.return_value.call_args[0][0]
+
+
+def _get_registered_shortcut_handler(app: MagicMock):
+    """Extract the function passed to @app.shortcut() decorator."""
+    return app.shortcut.return_value.call_args[0][0]
 
 
 class TestExtractThreadTs:
@@ -76,3 +85,56 @@ class TestRegisterCopilotCommand:
 
         handler.assert_not_called()
         assert "channel" in mock_slack_api.send_ephemeral.call_args[0][3].lower()
+
+
+class TestRegisterCopilotShortcut:
+    @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
+    def test_registers_message_shortcut(self, mock_slack_api):
+        app = MagicMock()
+        register_copilot_shortcut(app, MagicMock())
+        app.shortcut.assert_called_once_with(
+            {"callback_id": "draft_with_copilot", "type": "message_action"}
+        )
+
+    @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
+    def test_shortcut_handler_called_with_thread_data(self, mock_slack_api):
+        app = MagicMock()
+        handler = MagicMock()
+        mock_slack_api.read_thread.return_value = [{"user": "U1", "text": "hello"}]
+
+        register_copilot_shortcut(app, handler)
+        registered_fn = _get_registered_shortcut_handler(app)
+
+        shortcut = {
+            "channel": {"id": "C1"},
+            "user": {"id": "U1"},
+            "message": {"ts": "1516229207.000133", "thread_ts": "1516229200.000000"},
+        }
+        registered_fn(ack=MagicMock(), shortcut=shortcut, client=MagicMock())
+
+        handler.assert_called_once_with(
+            channel_id="C1", thread_ts="1516229200.000000", user_id="U1",
+            user_text="", thread_messages=[{"user": "U1", "text": "hello"}]
+        )
+
+    @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
+    def test_shortcut_in_channel_message_uses_message_ts_as_thread(self, mock_slack_api):
+        app = MagicMock()
+        handler = MagicMock()
+        mock_slack_api.read_thread.return_value = [{"user": "U2", "text": "root msg"}]
+
+        register_copilot_shortcut(app, handler)
+        registered_fn = _get_registered_shortcut_handler(app)
+
+        shortcut = {
+            "channel": {"id": "C2"},
+            "user": {"id": "U1"},
+            "message": {"ts": "1516229207.000133"},
+        }
+        registered_fn(ack=MagicMock(), shortcut=shortcut, client=MagicMock())
+
+        mock_slack_api.read_thread.assert_called_once_with("C2", "1516229207.000133")
+        handler.assert_called_once_with(
+            channel_id="C2", thread_ts="1516229207.000133", user_id="U1",
+            user_text="", thread_messages=[{"user": "U2", "text": "root msg"}]
+        )
