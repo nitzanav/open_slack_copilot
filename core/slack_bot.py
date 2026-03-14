@@ -1,4 +1,5 @@
 from common.llm.llm_client import llm_client
+from common.progressive_disclosure import progressive_disclosure
 from common.slack.slack_api import slack_api
 from common.slack.slack_bot import slack_listener, slack_listener_with_threads
 
@@ -23,18 +24,28 @@ def _handle_copilot(channel_id: str, thread_ts: str, user_id: str,
 
 
 def prepare_draft(thread_messages: list[dict], user_text: str) -> str:
-    prompt = compose_system_prompt(thread_messages, user_text)
+    skills = _select_skills(thread_messages, user_text)
+    prompt = compose_system_prompt(thread_messages, user_text, skills)
     return llm_client.generate(prompt)
 
 
-def compose_system_prompt(thread_messages: list[dict], user_text: str) -> str:
+def compose_system_prompt(thread_messages: list[dict], user_text: str,
+                          skills: list[str] | None = None) -> str:
     thread_block = _format_thread(thread_messages)
     instruction = user_text.strip() if user_text.strip() else DEFAULT_INSTRUCTION
-    return (
-        "You are a helpful assistant drafting a Slack reply.\n\n"
-        f"## Thread\n{thread_block}\n\n"
-        f"## Instruction\n{instruction}"
-    )
+    parts = ["You are a helpful assistant drafting a Slack reply."]
+    if skills:
+        parts.append("## Skills\n" + "\n\n".join(skills))
+    parts.append(f"## Thread\n{thread_block}")
+    parts.append(f"## Instruction\n{instruction}")
+    return "\n\n".join(parts)
+
+
+def _select_skills(thread_messages: list[dict], user_text: str) -> list[str]:
+    skills = progressive_disclosure.select_skills("reply", thread_messages, user_text)
+    if not skills:
+        return [progressive_disclosure.get_default_instruction()]
+    return skills
 
 
 def _format_thread(messages: list[dict]) -> str:
