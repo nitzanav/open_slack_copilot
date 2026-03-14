@@ -1,11 +1,16 @@
 import time
 import threading
+from typing import Callable
 
 from common.llm.llm_client import llm_client
 from common.rag import rag
 from common.slack.slack_api import slack_api
 
 SUMMARIZE_PROMPT = "Summarize this Slack message in one concise sentence:\n\n{text}"
+
+_last_indexed_ts: dict[str, str] = {}
+_scheduler_threads: list[threading.Thread] = []
+_scheduler_stop = threading.Event()
 
 
 def query_channel(channel_id: str, thread_context: str, top_k: int = 10,
@@ -54,6 +59,23 @@ def build_all_missing(channel_ids: list[str], checkpoint_seconds: float = 30 * 8
     return threads
 
 
+def schedule_periodic_build(channel_id: str, interval_seconds: float,
+                            checkpoint_seconds: float = 30 * 86400):
+    def loop():
+        while not _scheduler_stop.wait(timeout=interval_seconds):
+            _safe_build(channel_id, checkpoint_seconds)
+
+    t = threading.Thread(target=loop, daemon=True)
+    t.start()
+    _scheduler_threads.append(t)
+    return t
+
+
+def stop_scheduler():
+    _scheduler_stop.set()
+    _scheduler_stop.clear()
+
+
 def is_ready(channel_id: str) -> bool:
     return rag.collection_exists(_collection_name(channel_id))
 
@@ -69,6 +91,10 @@ def _safe_build(channel_id: str, checkpoint_seconds: float):
         pass
 
 
+def reset_state():
+    _last_indexed_ts.clear()
+
+
 def _build_index(channel_id: str, checkpoint_seconds: float):
     oldest = time.time() - checkpoint_seconds
     messages = slack_api.read_channel_history(channel_id, oldest=oldest)
@@ -76,8 +102,16 @@ def _build_index(channel_id: str, checkpoint_seconds: float):
         rag.ensure_collection(_collection_name(channel_id))
         return
 
+    collection = _collection_name(channel_id)
+    is_incremental = channel_id in _last_indexed_ts and rag.collection_exists(collection)
+    last_ts = _last_indexed_ts.get(channel_id) if is_incremental else None
+    new_messages = _filter_new_messages(messages, last_ts)
+
+    if not new_messages and is_incremental:
+        return
+
     documents = []
-    for msg in messages:
+    for msg in new_messages:
         summary = _summarize_message(msg)
         if summary is None:
             continue
@@ -91,12 +125,22 @@ def _build_index(channel_id: str, checkpoint_seconds: float):
             "channel": channel_id,
         })
 
-    collection = _collection_name(channel_id)
-    rag.delete_collection(collection)
+    if not is_incremental:
+        rag.delete_collection(collection)
+
     if documents:
         rag.insert(collection, documents)
     else:
         rag.ensure_collection(collection)
+
+    if messages:
+        _last_indexed_ts[channel_id] = max(m.get("ts", "0") for m in messages)
+
+
+def _filter_new_messages(messages: list[dict], last_ts: str | None) -> list[dict]:
+    if not last_ts:
+        return messages
+    return [m for m in messages if m.get("ts", "0") > last_ts]
 
 
 def _summarize_message(msg: dict) -> str | None:

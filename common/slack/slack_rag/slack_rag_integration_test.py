@@ -10,6 +10,7 @@ from common.slack.slack_rag import slack_rag
 @pytest.fixture(autouse=True)
 def fresh_qdrant():
     rag.set_client(QdrantClient(location=":memory:"))
+    slack_rag.reset_state()
     yield
 
 

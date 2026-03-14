@@ -11,6 +11,7 @@ from common.slack.slack_rag import slack_rag
 @pytest.fixture(autouse=True)
 def fresh_qdrant():
     rag.set_client(QdrantClient(location=":memory:"))
+    slack_rag.reset_state()
     yield
 
 
@@ -185,3 +186,47 @@ class TestStatus:
 
         slack_rag.build_if_missing("C_exists")
         mock_slack.read_channel_history.assert_not_called()
+
+
+class TestIncrementalBuild:
+    @patch("common.slack.slack_rag.slack_rag.slack_api")
+    @patch("common.slack.slack_rag.slack_rag.llm_client")
+    def test_second_build_only_summarizes_new_messages(self, mock_llm, mock_slack):
+        mock_slack.read_channel_history.return_value = CHANNEL_MESSAGES[:3]
+        mock_llm.generate.return_value = "summary"
+
+        slack_rag.build("C_inc")
+        assert mock_llm.generate.call_count == 3
+
+        mock_llm.generate.reset_mock()
+        new_msg = {"user": "U9", "text": "Brand new message", "ts": "199999999.000"}
+        mock_slack.read_channel_history.return_value = CHANNEL_MESSAGES[:3] + [new_msg]
+
+        slack_rag.build("C_inc")
+        assert mock_llm.generate.call_count == 1
+
+    @patch("common.slack.slack_rag.slack_rag.slack_api")
+    @patch("common.slack.slack_rag.slack_rag.llm_client")
+    def test_no_new_messages_skips_summarization(self, mock_llm, mock_slack):
+        mock_slack.read_channel_history.return_value = CHANNEL_MESSAGES[:3]
+        mock_llm.generate.return_value = "summary"
+
+        slack_rag.build("C_skip")
+        mock_llm.generate.reset_mock()
+
+        slack_rag.build("C_skip")
+        mock_llm.generate.assert_not_called()
+
+
+class TestScheduler:
+    @patch("common.slack.slack_rag.slack_rag.slack_api")
+    @patch("common.slack.slack_rag.slack_rag.llm_client")
+    def test_schedule_periodic_build_triggers(self, mock_llm, mock_slack):
+        mock_slack.read_channel_history.return_value = CHANNEL_MESSAGES[:2]
+        mock_llm.generate.return_value = "summary"
+
+        t = slack_rag.schedule_periodic_build("C_sched", interval_seconds=0.2)
+        time.sleep(0.5)
+        slack_rag.stop_scheduler()
+
+        assert mock_slack.read_channel_history.call_count >= 1

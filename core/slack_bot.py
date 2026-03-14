@@ -16,6 +16,7 @@ def start():
     app = slack_listener.create_app()
     slack_listener_with_threads.register_copilot_command(app, _handle_copilot)
     _build_cross_channel_rags()
+    _start_periodic_rag_schedules()
     slack_listener.start(app)
 
 
@@ -119,6 +120,27 @@ def _build_cross_channel_rags():
     cross_channels = _get_cross_channel_ids()
     if cross_channels:
         slack_rag.build_all_missing(cross_channels, _get_checkpoint_seconds())
+
+
+def _start_periodic_rag_schedules():
+    config = load_config()
+    checkpoint = _get_checkpoint_seconds()
+    for entry in config.get("rag", {}).get("slack", []):
+        channel = entry.get("channel", "")
+        update = entry.get("update", "")
+        if not channel or not update:
+            continue
+        interval = _parse_update_interval(update)
+        if interval:
+            slack_rag.build_if_missing(channel, checkpoint)
+            slack_rag.schedule_periodic_build(channel, interval, checkpoint)
+
+
+def _parse_update_interval(update_str: str) -> float | None:
+    parts = update_str.strip().split()
+    if len(parts) == 2 and parts[0] == "every":
+        return parse_duration_seconds(parts[1])
+    return None
 
 
 def _get_cross_channel_ids() -> list[str]:
