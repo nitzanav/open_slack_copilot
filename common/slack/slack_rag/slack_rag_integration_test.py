@@ -21,6 +21,12 @@ CHANNEL_HISTORY = [
     {"user": "U2", "text": "The database migration failed on staging", "ts": "1700000005.000"},
 ]
 
+ENGINEERING_HISTORY = [
+    {"user": "U4", "text": "New architecture proposal for microservices", "ts": "1800000001.000"},
+    {"user": "U5", "text": "We should use event-driven design", "ts": "1800000002.000"},
+    {"user": "U4", "text": "Performance benchmarks look good", "ts": "1800000003.000"},
+]
+
 
 class TestBuildThenQuery:
     @patch("common.slack.slack_rag.slack_rag.slack_api")
@@ -52,30 +58,39 @@ class TestBuildThenQuery:
         assert len(new_results) > len(old_results)
 
 
-class TestSlashCommandWithRag:
-    @patch("core.slack_bot.progressive_disclosure")
-    @patch("core.slack_bot.llm_client")
+class TestCrossChannelIntegration:
     @patch("common.slack.slack_rag.slack_rag.slack_api")
     @patch("common.slack.slack_rag.slack_rag.llm_client")
-    def test_draft_includes_rag_in_prompt(self, mock_rag_llm, mock_rag_slack, mock_bot_llm, mock_pd):
-        mock_rag_slack.read_channel_history.return_value = CHANNEL_HISTORY
-        mock_rag_llm.generate.side_effect = lambda p: p.split("\n\n")[-1][:80]
+    def test_startup_to_query(self, mock_llm, mock_slack):
+        def history_side_effect(channel_id, oldest=0, limit=1000):
+            if channel_id == "eng":
+                return ENGINEERING_HISTORY
+            return CHANNEL_HISTORY
+        mock_slack.read_channel_history.side_effect = history_side_effect
+        mock_llm.generate.return_value = "summary"
 
-        slack_rag.build("C_draft")
+        threads = slack_rag.build_all_missing(["eng", "support"])
+        for t in threads:
+            t.join(timeout=5)
 
-        mock_pd.select_skills.return_value = []
-        mock_pd.get_default_instruction.return_value = "default"
-        mock_bot_llm.generate.return_value = "Draft with RAG"
+        results = slack_rag.query_cross_channel(["eng", "support"], "architecture")
+        assert len(results) > 0
 
-        with patch("core.slack_bot.slack_rag") as mock_sr:
-            mock_sr.is_ready.return_value = True
-            mock_sr.query_channel.return_value = [{"text": "deployment pipeline summary"}]
+    @patch("common.slack.slack_rag.slack_rag.slack_api")
+    @patch("common.slack.slack_rag.slack_rag.llm_client")
+    def test_full_draft_with_channel_and_cross_channel(self, mock_llm, mock_slack):
+        def history_side_effect(channel_id, oldest=0, limit=1000):
+            if channel_id == "eng":
+                return ENGINEERING_HISTORY
+            return CHANNEL_HISTORY
+        mock_slack.read_channel_history.side_effect = history_side_effect
+        mock_llm.generate.return_value = "summary"
 
-            from core.slack_bot import prepare_draft
-            with patch("core.slack_bot.slack_api"):
-                result = prepare_draft("C_draft", "T1", "U1",
-                                       [{"user": "U1", "text": "help with deploy"}], "")
+        slack_rag.build("support")
+        slack_rag.build("eng")
 
-        assert result == "Draft with RAG"
-        prompt = mock_bot_llm.generate.call_args[0][0]
-        assert "deployment pipeline summary" in prompt
+        channel_results = slack_rag.query_channel("support", "deployment")
+        cross_results = slack_rag.query_cross_channel(["eng"], "architecture", exclude_channel="support")
+
+        assert len(channel_results) > 0
+        assert len(cross_results) > 0

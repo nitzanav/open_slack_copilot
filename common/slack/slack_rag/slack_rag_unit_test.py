@@ -19,6 +19,22 @@ CHANNEL_MESSAGES = [
     for i in range(15)
 ]
 
+ENGINEERING_MESSAGES = [
+    {"user": "U2", "text": f"Engineering discussion about architecture {i}", "ts": f"180000{i:04d}.000"}
+    for i in range(5)
+]
+
+PRODUCT_MESSAGES = [
+    {"user": "U3", "text": f"Product roadmap item {i}", "ts": f"190000{i:04d}.000"}
+    for i in range(5)
+]
+
+
+def _build_channel(channel_id, messages, mock_llm, mock_slack):
+    mock_slack.read_channel_history.return_value = messages
+    mock_llm.generate.return_value = "summary"
+    slack_rag.build(channel_id)
+
 
 class TestBuild:
     @patch("common.slack.slack_rag.slack_rag.slack_api")
@@ -71,7 +87,7 @@ class TestQuery:
     @patch("common.slack.slack_rag.slack_rag.llm_client")
     def test_query_returns_top_10(self, mock_llm, mock_slack):
         mock_slack.read_channel_history.return_value = CHANNEL_MESSAGES
-        mock_llm.generate.side_effect = lambda p: f"Summary {CHANNEL_MESSAGES.index(next((m for m in CHANNEL_MESSAGES if m['text'][-10:] in p), CHANNEL_MESSAGES[0]))}" if "Summarize" in p else "summary"
+        mock_llm.generate.side_effect = lambda p: f"Summary about deployment {hash(p) % 100}"
 
         slack_rag.build("C_many")
         results = slack_rag.query_channel("C_many", "deployment issue")
@@ -80,6 +96,71 @@ class TestQuery:
     def test_query_empty_channel(self):
         results = slack_rag.query_channel("nonexistent", "anything")
         assert results == []
+
+
+class TestCrossChannel:
+    @patch("common.slack.slack_rag.slack_rag.slack_api")
+    @patch("common.slack.slack_rag.slack_rag.llm_client")
+    def test_query_cross_channel_merges_results(self, mock_llm, mock_slack):
+        _build_channel("eng", ENGINEERING_MESSAGES, mock_llm, mock_slack)
+        _build_channel("prod", PRODUCT_MESSAGES, mock_llm, mock_slack)
+        _build_channel("support", CHANNEL_MESSAGES[:5], mock_llm, mock_slack)
+
+        results = slack_rag.query_cross_channel(["eng", "prod", "support"], "architecture", top_k=10)
+        assert len(results) == 10
+
+    @patch("common.slack.slack_rag.slack_rag.slack_api")
+    @patch("common.slack.slack_rag.slack_rag.llm_client")
+    def test_cross_channel_excludes_current(self, mock_llm, mock_slack):
+        _build_channel("eng", ENGINEERING_MESSAGES, mock_llm, mock_slack)
+        _build_channel("support", CHANNEL_MESSAGES[:3], mock_llm, mock_slack)
+
+        results = slack_rag.query_cross_channel(
+            ["eng", "support"], "deployment", exclude_channel="support"
+        )
+        assert all(r.get("channel") != "support" for r in results)
+
+    @patch("common.slack.slack_rag.slack_rag.slack_api")
+    @patch("common.slack.slack_rag.slack_rag.llm_client")
+    def test_missing_channel_detected(self, mock_llm, mock_slack):
+        _build_channel("eng", ENGINEERING_MESSAGES, mock_llm, mock_slack)
+        missing = slack_rag.missing_channels(["eng", "nonexistent"])
+        assert missing == ["nonexistent"]
+
+    def test_no_cross_channel_config_returns_empty(self):
+        results = slack_rag.query_cross_channel([], "anything")
+        assert results == []
+
+    @patch("common.slack.slack_rag.slack_rag.slack_api")
+    @patch("common.slack.slack_rag.slack_rag.llm_client")
+    def test_build_all_missing(self, mock_llm, mock_slack):
+        mock_slack.read_channel_history.return_value = ENGINEERING_MESSAGES[:2]
+        mock_llm.generate.return_value = "summary"
+
+        threads = slack_rag.build_all_missing(["ch_a", "ch_b"])
+        for t in threads:
+            t.join(timeout=5)
+
+        assert slack_rag.is_ready("ch_a")
+        assert slack_rag.is_ready("ch_b")
+
+    @patch("common.slack.slack_rag.slack_rag.slack_api")
+    @patch("common.slack.slack_rag.slack_rag.llm_client")
+    def test_partial_failure(self, mock_llm, mock_slack):
+        def side_effect(channel_id, oldest=0, limit=1000):
+            if channel_id == "ch_fail":
+                raise Exception("API error")
+            return ENGINEERING_MESSAGES[:2]
+
+        mock_slack.read_channel_history.side_effect = side_effect
+        mock_llm.generate.return_value = "summary"
+
+        threads = slack_rag.build_all_missing(["ch_ok", "ch_fail"])
+        for t in threads:
+            t.join(timeout=5)
+
+        assert slack_rag.is_ready("ch_ok")
+        assert not slack_rag.is_ready("ch_fail")
 
 
 class TestStatus:

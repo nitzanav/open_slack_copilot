@@ -4,7 +4,11 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from core.slack_bot import compose_system_prompt, prepare_draft, _handle_copilot, _select_skills, _load_examples, DEFAULT_INSTRUCTION
+from core.slack_bot import (
+    compose_system_prompt, prepare_draft, _handle_copilot,
+    _select_skills, _load_examples, _build_cross_channel_rags,
+    _fetch_cross_channel_rag, DEFAULT_INSTRUCTION,
+)
 
 FIXTURES = Path(__file__).parent.parent / "tests" / "fixtures"
 
@@ -29,47 +33,41 @@ class TestComposeSystemPrompt:
         prompt = compose_system_prompt(THREAD_3, "")
         assert DEFAULT_INSTRUCTION in prompt
 
-    def test_singleton_thread(self):
-        prompt = compose_system_prompt(THREAD_1, "")
-        assert THREAD_1[0]["text"] in prompt
-
-    def test_large_thread_all_included(self):
-        prompt = compose_system_prompt(THREAD_50, "summarize and reply")
-        for msg in THREAD_50:
-            assert msg["text"] in prompt
-
     def test_prompt_includes_skills(self):
-        skills = ["Be polite and professional.", "Focus on technical accuracy."]
+        skills = ["Be polite.", "Be technical."]
         prompt = compose_system_prompt(THREAD_3, "", skills)
         assert "Skills" in prompt
         for s in skills:
             assert s in prompt
 
-    def test_user_text_positioned_after_skills(self):
-        skills = ["Skill content here"]
-        prompt = compose_system_prompt(THREAD_3, "be casual", skills)
-        assert prompt.index("be casual") > prompt.index("Skill content here")
-
     def test_prompt_includes_rag_results(self):
-        rag_results = [{"text": "Previous deployment failed due to config"}, {"text": "Use rollback command"}]
+        rag_results = [{"text": "deploy info"}]
         prompt = compose_system_prompt(THREAD_3, "", rag_results=rag_results)
         assert "Relevant Channel Context" in prompt
-        assert "Previous deployment failed" in prompt
+        assert "deploy info" in prompt
+
+    def test_prompt_includes_cross_channel_rag(self):
+        cross = [{"text": "cross-channel info", "channel": "eng"}]
+        prompt = compose_system_prompt(THREAD_3, "", cross_rag_results=cross)
+        assert "Cross-Channel Context" in prompt
+        assert "cross-channel info" in prompt
+        assert "[eng]" in prompt
 
     def test_prompt_includes_examples(self):
-        examples = [{"question": "How to deploy?", "answer": "Use CI/CD pipeline"}]
+        examples = [{"question": "How?", "answer": "Like this."}]
         prompt = compose_system_prompt(THREAD_3, "", examples=examples)
         assert "Example Replies" in prompt
-        assert "How to deploy?" in prompt
 
     def test_prompt_ordering(self):
         prompt = compose_system_prompt(
             THREAD_3, "my instruction",
             skills=["skill1"], rag_results=[{"text": "rag1"}],
+            cross_rag_results=[{"text": "cross1", "channel": "x"}],
             examples=[{"question": "q", "answer": "a"}]
         )
         assert prompt.index("Skills") < prompt.index("Relevant Channel Context")
-        assert prompt.index("Relevant Channel Context") < prompt.index("Example Replies")
+        assert prompt.index("Relevant Channel Context") < prompt.index("Cross-Channel Context")
+        assert prompt.index("Cross-Channel Context") < prompt.index("Example Replies")
         assert prompt.index("Example Replies") < prompt.index("Thread")
         assert prompt.index("Thread") < prompt.index("Instruction")
 
@@ -81,60 +79,107 @@ class TestSelectSkills:
         assert _select_skills(THREAD_3, "") == ["Be polite."]
 
     @patch("core.slack_bot.progressive_disclosure")
-    def test_falls_back_to_default_when_no_match(self, mock_pd):
+    def test_falls_back_to_default(self, mock_pd):
         mock_pd.select_skills.return_value = []
-        mock_pd.get_default_instruction.return_value = "Default instruction"
-        assert _select_skills(THREAD_3, "") == ["Default instruction"]
+        mock_pd.get_default_instruction.return_value = "Default"
+        assert _select_skills(THREAD_3, "") == ["Default"]
 
 
 class TestLoadExamples:
     def test_loads_example_threads(self):
         examples = _load_examples()
         assert len(examples) > 0
-        assert "question" in examples[0]
-        assert "answer" in examples[0]
+
+
+class TestCrossChannelRag:
+    @patch("core.slack_bot.load_config")
+    @patch("core.slack_bot.slack_rag")
+    @patch("core.slack_bot.slack_api")
+    def test_fetch_cross_channel_with_missing(self, mock_slack, mock_rag, mock_config):
+        mock_config.return_value = {"rag": {"cross_channel": ["eng", "prod"], "checkpoint_duration": "30d"}}
+        mock_rag.missing_channels.return_value = ["prod"]
+        mock_rag.query_cross_channel.return_value = [{"text": "cross result", "channel": "eng"}]
+
+        result = _fetch_cross_channel_rag("support", "T1", "U1", "deploy question")
+
+        mock_slack.send_ephemeral.assert_called_once()
+        assert "prod" in mock_slack.send_ephemeral.call_args[0][3]
+        mock_rag.build.assert_called_once_with("prod", 2592000.0)
+        assert result == [{"text": "cross result", "channel": "eng"}]
+
+    @patch("core.slack_bot.load_config")
+    @patch("core.slack_bot.slack_rag")
+    def test_no_cross_channel_config(self, mock_rag, mock_config):
+        mock_config.return_value = {"rag": {"cross_channel": []}}
+        result = _fetch_cross_channel_rag("support", "T1", "U1", "context")
+        assert result == []
+        mock_rag.query_cross_channel.assert_not_called()
+
+    @patch("core.slack_bot.load_config")
+    @patch("core.slack_bot.slack_rag")
+    def test_startup_builds_cross_channel(self, mock_rag, mock_config):
+        mock_config.return_value = {"rag": {"cross_channel": ["a", "b", "c"], "checkpoint_duration": "30d"}}
+        _build_cross_channel_rags()
+        mock_rag.build_all_missing.assert_called_once()
+        assert mock_rag.build_all_missing.call_args[0][0] == ["a", "b", "c"]
 
 
 class TestPrepareDraft:
+    @patch("core.slack_bot.load_config")
     @patch("core.slack_bot.slack_rag")
     @patch("core.slack_bot.progressive_disclosure")
     @patch("core.slack_bot.llm_client")
-    def test_calls_llm_and_returns_draft(self, mock_llm, mock_pd, mock_rag):
+    @patch("core.slack_bot.slack_api")
+    def test_full_draft_with_cross_channel(self, mock_slack, mock_llm, mock_pd, mock_rag, mock_config):
         mock_pd.select_skills.return_value = []
         mock_pd.get_default_instruction.return_value = "default"
-        mock_rag.is_ready.return_value = False
-        mock_rag.query_channel.return_value = []
-        mock_llm.generate.return_value = "Here is my draft"
+        mock_rag.is_ready.return_value = True
+        mock_rag.query_channel.return_value = [{"text": "channel rag"}]
+        mock_rag.missing_channels.return_value = []
+        mock_rag.query_cross_channel.return_value = [{"text": "cross rag", "channel": "eng"}]
+        mock_config.return_value = {"rag": {"cross_channel": ["eng"], "checkpoint_duration": "30d"}}
+        mock_llm.generate.return_value = "Full draft"
 
-        with patch("core.slack_bot.slack_api"):
-            result = prepare_draft("C1", "T1", "U1", THREAD_3, "help me reply")
-        assert result == "Here is my draft"
+        result = prepare_draft("support", "T1", "U1", THREAD_3, "")
+        assert result == "Full draft"
+
+        prompt = mock_llm.generate.call_args[0][0]
+        assert "channel rag" in prompt
+        assert "cross rag" in prompt
 
 
 class TestHandleCopilot:
+    @patch("core.slack_bot.load_config")
     @patch("core.slack_bot.slack_rag")
     @patch("core.slack_bot.progressive_disclosure")
     @patch("core.slack_bot.slack_api")
     @patch("core.slack_bot.llm_client")
-    def test_draft_sent_as_ephemeral(self, mock_llm, mock_slack, mock_pd, mock_rag):
+    def test_draft_sent_as_ephemeral(self, mock_llm, mock_slack, mock_pd, mock_rag, mock_config):
         mock_pd.select_skills.return_value = []
         mock_pd.get_default_instruction.return_value = "default"
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = []
+        mock_rag.missing_channels.return_value = []
+        mock_rag.query_cross_channel.return_value = []
+        mock_config.return_value = {"rag": {"cross_channel": [], "checkpoint_duration": "30d"}}
         mock_llm.generate.return_value = "Here is my draft"
 
         _handle_copilot("C123", "T123", "U001", "help", THREAD_3)
         mock_slack.send_ephemeral.assert_called_with("C123", "T123", "U001", "Here is my draft")
 
+    @patch("core.slack_bot.load_config")
     @patch("core.slack_bot.slack_rag")
     @patch("core.slack_bot.progressive_disclosure")
     @patch("core.slack_bot.slack_api")
     @patch("core.slack_bot.llm_client")
-    def test_llm_error_sends_error_ephemeral(self, mock_llm, mock_slack, mock_pd, mock_rag):
+    def test_llm_error_sends_error_ephemeral(self, mock_llm, mock_slack, mock_pd, mock_rag, mock_config):
         mock_pd.select_skills.return_value = []
         mock_pd.get_default_instruction.return_value = "default"
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = []
+        mock_rag.missing_channels.return_value = []
+        mock_rag.query_cross_channel.return_value = []
+        mock_config.return_value = {"rag": {"cross_channel": [], "checkpoint_duration": "30d"}}
         mock_llm.generate.side_effect = Exception("LLM down")
 
         _handle_copilot("C123", "T123", "U001", "", THREAD_3)

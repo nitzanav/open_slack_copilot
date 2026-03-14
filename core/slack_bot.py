@@ -15,6 +15,7 @@ EXAMPLES_PATH = Path(__file__).parent / "example_threads.json"
 def start():
     app = slack_listener.create_app()
     slack_listener_with_threads.register_copilot_command(app, _handle_copilot)
+    _build_cross_channel_rags()
     slack_listener.start(app)
 
 
@@ -32,15 +33,20 @@ def _handle_copilot(channel_id: str, thread_ts: str, user_id: str,
 def prepare_draft(channel_id: str, thread_ts: str, user_id: str,
                   thread_messages: list[dict], user_text: str) -> str:
     skills = _select_skills(thread_messages, user_text)
+    thread_context = " ".join(m.get("text", "") for m in thread_messages[-5:])
     rag_results = _fetch_rag_context(channel_id, thread_ts, user_id, thread_messages)
+    cross_rag_results = _fetch_cross_channel_rag(channel_id, thread_ts, user_id, thread_context)
     examples = _load_examples()
-    prompt = compose_system_prompt(thread_messages, user_text, skills, rag_results, examples)
+    prompt = compose_system_prompt(
+        thread_messages, user_text, skills, rag_results, cross_rag_results, examples
+    )
     return llm_client.generate(prompt)
 
 
 def compose_system_prompt(thread_messages: list[dict], user_text: str,
                           skills: list[str] | None = None,
                           rag_results: list[dict] | None = None,
+                          cross_rag_results: list[dict] | None = None,
                           examples: list[dict] | None = None) -> str:
     thread_block = _format_thread(thread_messages)
     instruction = user_text.strip() if user_text.strip() else DEFAULT_INSTRUCTION
@@ -50,6 +56,9 @@ def compose_system_prompt(thread_messages: list[dict], user_text: str,
     if rag_results:
         rag_block = "\n".join(f"- {r.get('text', '')}" for r in rag_results)
         parts.append(f"## Relevant Channel Context\n{rag_block}")
+    if cross_rag_results:
+        cross_block = "\n".join(f"- [{r.get('channel', '?')}] {r.get('text', '')}" for r in cross_rag_results)
+        parts.append(f"## Cross-Channel Context\n{cross_block}")
     if examples:
         ex_block = "\n".join(f"Q: {e['question']}\nA: {e['answer']}" for e in examples)
         parts.append(f"## Example Replies\n{ex_block}")
@@ -73,13 +82,48 @@ def _fetch_rag_context(channel_id: str, thread_ts: str, user_id: str,
                 channel_id, thread_ts, user_id,
                 "Preparing RAG for this channel, will update when done."
             )
-            checkpoint = _get_checkpoint_seconds()
-            slack_rag.build(channel_id, checkpoint)
+            slack_rag.build(channel_id, _get_checkpoint_seconds())
 
         thread_context = " ".join(m.get("text", "") for m in thread_messages[-5:])
         return slack_rag.query_channel(channel_id, thread_context)
     except Exception:
         return []
+
+
+def _fetch_cross_channel_rag(channel_id: str, thread_ts: str, user_id: str,
+                             thread_context: str) -> list[dict]:
+    cross_channels = _get_cross_channel_ids()
+    if not cross_channels:
+        return []
+
+    try:
+        missing = slack_rag.missing_channels(cross_channels)
+        if missing:
+            names = ", ".join(missing)
+            slack_api.send_ephemeral(
+                channel_id, thread_ts, user_id,
+                f"Creating RAG for {names}, please wait."
+            )
+            checkpoint = _get_checkpoint_seconds()
+            for ch in missing:
+                slack_rag.build(ch, checkpoint)
+
+        return slack_rag.query_cross_channel(
+            cross_channels, thread_context, exclude_channel=channel_id
+        )
+    except Exception:
+        return []
+
+
+def _build_cross_channel_rags():
+    cross_channels = _get_cross_channel_ids()
+    if cross_channels:
+        slack_rag.build_all_missing(cross_channels, _get_checkpoint_seconds())
+
+
+def _get_cross_channel_ids() -> list[str]:
+    config = load_config()
+    return config.get("rag", {}).get("cross_channel", [])
 
 
 def _get_checkpoint_seconds() -> float:

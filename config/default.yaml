@@ -3,3 +3,4 @@ llm:
 
 rag:
   checkpoint_duration: "30d"
+  cross_channel: []
