@@ -13,13 +13,15 @@
 - **Draft replies** when mentioned
   - By default, use RAG of the relevant channel
   - Using list of predefined "reply skills"
-- **Followups** — DM non-responders
+- **Followups** — When I request to followup to report when done to a group of people, remind them.
 - **Tech leader alerts** — notify when something requires attention
-- **Channel supervision** — watch for interesting behavior or content
-  - e.g. technical discussions
-- **Urgent pending replies** — surface top unread
-  - What counts as urgent? Prioritize top items
+- **Watching Channel supervision** — requests are handled properly? on time?
+- **Notify me** when they talk messages queues
+- **Remind me** if I didnt reply on time
+- **Urgent pending replies** — whenever there is a talk on urgent bug, notify me in DM
 - **Answer support tickets**
+- **Create jira ticket** for this action item according to my policy
+- **Notify when there is a customer with too many issue**
 
 ## Skills/Tools
 
