@@ -29,9 +29,13 @@ def start():
 
 @log
 def _handle_copilot(channel_id: str, thread_ts: str, user_id: str,
-                    user_text: str, thread_messages: list[dict]):
+                    user_text: str, thread_messages: list[dict],
+                    channel_name: str | None = None):
     try:
-        draft = prepare_draft(channel_id, thread_ts, user_id, thread_messages, user_text)
+        draft = prepare_draft(
+            channel_id, thread_ts, user_id, thread_messages, user_text,
+            channel_name=channel_name,
+        )
         slack_api.send_ephemeral(channel_id, thread_ts, user_id, draft)
     except Exception:
         slack_api.send_ephemeral(
@@ -40,7 +44,8 @@ def _handle_copilot(channel_id: str, thread_ts: str, user_id: str,
 
 
 def prepare_draft(channel_id: str, thread_ts: str, user_id: str,
-                  thread_messages: list[dict], user_text: str) -> str:
+                  thread_messages: list[dict], user_text: str,
+                  channel_name: str | None = None) -> str:
     skills = _select_skills(thread_messages, user_text)
     thread_context = " ".join(m.get("text", "") for m in thread_messages[-5:])
     rag_results = _fetch_rag_context(channel_id, thread_ts, user_id, thread_messages)
@@ -55,6 +60,7 @@ def prepare_draft(channel_id: str, thread_ts: str, user_id: str,
         examples,
         channel_id=channel_id,
         thread_ts=thread_ts,
+        channel_name=channel_name,
     )
     return llm_client.generate(prompt)
 
@@ -65,12 +71,20 @@ def compose_system_prompt(thread_messages: list[dict], user_text: str,
                           cross_rag_results: list[dict] | None = None,
                           examples: list[dict] | None = None,
                           channel_id: str | None = None,
-                          thread_ts: str | None = None) -> str:
+                          thread_ts: str | None = None,
+                          channel_name: str | None = None) -> str:
+    channel_display = None
+    if channel_name and channel_name.strip():
+        cn = channel_name.strip()
+        channel_display = cn if cn.startswith("#") else f"#{cn}"
     channel_ctx = ""
     if rag_results:
         if channel_id and thread_ts:
             channel_ctx = slack_rag.format_rag_context_block(
-                channel_id, thread_ts, rag_results
+                channel_id,
+                thread_ts,
+                rag_results,
+                channel_display_name=channel_display,
             )
         else:
             channel_ctx = "\n".join(f"- {r.get('text', '')}" for r in rag_results)

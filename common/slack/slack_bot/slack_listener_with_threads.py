@@ -30,6 +30,7 @@ def register_copilot_command(app: App, handler):
             user_id=user_id,
             user_text=user_text,
             thread_messages=thread_messages,
+            channel_name=command.get("channel_name"),
         )
 
 
@@ -57,6 +58,7 @@ def register_copilot_shortcut(app: App, handler):
             user_id=user_id,
             user_text="",
             thread_messages=thread_messages,
+            channel_name=shortcut["channel"].get("name"),
         )
 
 

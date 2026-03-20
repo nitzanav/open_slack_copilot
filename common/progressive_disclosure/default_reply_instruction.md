@@ -1,1 +1,1 @@
-Generate a helpful, context-aware reply based on the thread conversation.
+Reply accurate, be short concise, focus on the most important things which is the key for the answer.

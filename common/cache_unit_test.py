@@ -4,10 +4,10 @@ from unittest.mock import Mock
 from common.cache import DEFAULT_TTL_SECONDS, cache
 
 
-def test_cache_returns_same_value_without_calling_twice():
+def test_cache_returns_same_value_without_calling_twice(tmp_path):
     inner = Mock(return_value=42)
 
-    @cache(ttl_seconds=60)
+    @cache(ttl_seconds=60, cache_dir=tmp_path)
     def fn(x: int) -> int:
         return inner(x)
 
@@ -16,10 +16,10 @@ def test_cache_returns_same_value_without_calling_twice():
     inner.assert_called_once_with(1)
 
 
-def test_cache_expires_after_ttl():
+def test_cache_expires_after_ttl(tmp_path):
     inner = Mock(return_value="a")
 
-    @cache(ttl_seconds=0.05)
+    @cache(ttl_seconds=0.05, cache_dir=tmp_path)
     def fn() -> str:
         return inner()
 
@@ -31,12 +31,12 @@ def test_cache_expires_after_ttl():
     assert inner.call_count == 2
 
 
-def test_cache_bare_decorator_uses_default_ttl():
+def test_cache_bare_decorator_uses_default_ttl(tmp_path):
     assert DEFAULT_TTL_SECONDS == 7 * 24 * 3600
 
     inner = Mock(return_value=0)
 
-    @cache
+    @cache(cache_dir=tmp_path)
     def fn() -> int:
         return inner()
 
