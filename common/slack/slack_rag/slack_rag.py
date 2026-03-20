@@ -194,3 +194,77 @@ def _deduplicate_and_rank(results: list[dict], query_text: str, top_k: int) -> l
 
 def _collection_name(channel_id: str) -> str:
     return f"slack_channel_{channel_id}"
+
+
+def _ts_display(ts: str) -> str:
+    if not ts:
+        return "-"
+    try:
+        return str(int(float(ts)))
+    except (ValueError, TypeError):
+        part = str(ts).split(".")[0]
+        return part if part else "-"
+
+
+def _message_body(r: dict) -> str:
+    return (r.get("original") or r.get("text") or "").strip()
+
+
+def format_rag_context_block(
+    channel_id: str,
+    thread_ts: str,
+    results: list[dict],
+    *,
+    channel_display_name: str | None = None,
+) -> str:
+    """Format same-channel RAG hits as plain text for LLM context."""
+    if not results:
+        return ""
+    name = channel_display_name if channel_display_name is not None else (
+        slack_api.get_channel_prefixed_name(channel_id)
+    )
+    user_meta: dict[str, str] = {}
+    order: list[str] = []
+    for r in results:
+        uid = (r.get("from") or "").strip()
+        if not uid:
+            continue
+        if uid not in user_meta:
+            order.append(uid)
+            label = (r.get("from_name") or "").strip()
+            if not label:
+                label = slack_api.get_user_display_name(uid)
+            user_meta[uid] = label
+
+    lines = [
+        f"Channel id: {channel_id}",
+        f"Channel name: {name}",
+        f"Thread id: {thread_ts}",
+        "Users:",
+    ]
+    for uid in order:
+        lines.append(f"  {uid}: {user_meta[uid]}")
+    lines.append("")
+
+    for r in results:
+        uid = (r.get("from") or "unknown").strip() or "unknown"
+        ts = _ts_display(str(r.get("ts") or ""))
+        body = _message_body(r)
+        lines.append(f"{uid} [{ts}]: {body}")
+    return "\n".join(lines)
+
+
+def format_cross_channel_rag_text(results: list[dict]) -> str:
+    """Format cross-channel RAG hits: one text block per source channel."""
+    if not results:
+        return ""
+    by_channel: dict[str, list[dict]] = {}
+    for r in results:
+        ch = (r.get("channel") or "").strip() or "?"
+        by_channel.setdefault(ch, []).append(r)
+    blocks = []
+    for ch_id in sorted(by_channel.keys()):
+        blocks.append(
+            format_rag_context_block(ch_id, "—", by_channel[ch_id])
+        )
+    return "\n\n".join(blocks)

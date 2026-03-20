@@ -47,7 +47,14 @@ def prepare_draft(channel_id: str, thread_ts: str, user_id: str,
     cross_rag_results = _fetch_cross_channel_rag(channel_id, thread_ts, user_id, thread_context)
     examples = _load_examples()
     prompt = compose_system_prompt(
-        thread_messages, user_text, skills, rag_results, cross_rag_results, examples
+        thread_messages,
+        user_text,
+        skills,
+        rag_results,
+        cross_rag_results,
+        examples,
+        channel_id=channel_id,
+        thread_ts=thread_ts,
     )
     return llm_client.generate(prompt)
 
@@ -56,13 +63,24 @@ def compose_system_prompt(thread_messages: list[dict], user_text: str,
                           skills: list[str] | None = None,
                           rag_results: list[dict] | None = None,
                           cross_rag_results: list[dict] | None = None,
-                          examples: list[dict] | None = None) -> str:
+                          examples: list[dict] | None = None,
+                          channel_id: str | None = None,
+                          thread_ts: str | None = None) -> str:
+    channel_ctx = ""
+    if rag_results:
+        if channel_id and thread_ts:
+            channel_ctx = slack_rag.format_rag_context_block(
+                channel_id, thread_ts, rag_results
+            )
+        else:
+            channel_ctx = "\n".join(f"- {r.get('text', '')}" for r in rag_results)
+    cross_ctx = ""
+    if cross_rag_results:
+        cross_ctx = slack_rag.format_cross_channel_rag_text(cross_rag_results)
     rendered = PROMPT_TEMPLATE.format(
         skills=_format_section("Skills", "\n\n".join(skills)) if skills else "",
-        channel_context=_format_section("Relevant Channel Context",
-            "\n".join(f"- {r.get('text', '')}" for r in rag_results)) if rag_results else "",
-        cross_channel_context=_format_section("Cross-Channel Context",
-            "\n".join(f"- [{r.get('channel', '?')}] {r.get('text', '')}" for r in cross_rag_results)) if cross_rag_results else "",
+        channel_context=_format_section("Relevant Channel Context", channel_ctx) if channel_ctx else "",
+        cross_channel_context=_format_section("Cross-Channel Context", cross_ctx) if cross_ctx else "",
         examples=_format_section("Example Replies",
             "\n".join(f"Q: {e['question']}\nA: {e['answer']}" for e in examples)) if examples else "",
         thread=_format_thread(thread_messages),

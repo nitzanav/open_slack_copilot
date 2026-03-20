@@ -247,6 +247,56 @@ class TestIncrementalBuild:
         mock_llm.generate.assert_not_called()
 
 
+class TestFormatRagText:
+    @patch("common.slack.slack_rag.slack_rag.slack_api")
+    def test_format_rag_context_block_matches_plain_text_shape(self, mock_slack):
+        mock_slack.get_user_display_name.return_value = ""
+        results = [
+            {
+                "from": "U0ALHV1GDDK",
+                "from_name": "Info",
+                "ts": "1773505612.000000",
+                "original": "The make run does not work",
+            },
+            {
+                "from": "U0AMFJ2AVME",
+                "from_name": "Hola",
+                "ts": "1773505723.000000",
+                "original": "now make test does not work. what to do now?",
+            },
+        ]
+        text = slack_rag.format_rag_context_block(
+            "12345678",
+            "C0ALHSXRDU5",
+            results,
+            channel_display_name="#all-elias",
+        )
+        assert text == (
+            "Channel id: 12345678\n"
+            "Channel name: #all-elias\n"
+            "Thread id: C0ALHSXRDU5\n"
+            "Users:\n"
+            "  U0ALHV1GDDK: Info\n"
+            "  U0AMFJ2AVME: Hola\n"
+            "\n"
+            "U0ALHV1GDDK [1773505612]: The make run does not work\n"
+            "U0AMFJ2AVME [1773505723]: now make test does not work. what to do now?"
+        )
+
+    @patch("common.slack.slack_rag.slack_rag.slack_api")
+    def test_format_cross_channel_rag_text_groups_channels(self, mock_slack):
+        mock_slack.get_channel_prefixed_name.side_effect = lambda cid: f"#{cid}"
+        mock_slack.get_user_display_name.return_value = ""
+        results = [
+            {"channel": "C2", "from": "U2", "ts": "2.0", "original": "second"},
+            {"channel": "C1", "from": "U1", "ts": "1.0", "original": "first"},
+        ]
+        text = slack_rag.format_cross_channel_rag_text(results)
+        assert text.index("Channel id: C1") < text.index("Channel id: C2")
+        assert "U1 [1]: first" in text
+        assert "U2 [2]: second" in text
+
+
 class TestScheduler:
     @patch("common.slack.slack_rag.slack_rag.slack_api")
     @patch("common.slack.slack_rag.slack_rag.llm_client")

@@ -42,6 +42,21 @@ def read_channel_history(channel_id: str, oldest: float = 0, limit: int = 1000) 
 
 
 @cache
+def get_channel_prefixed_name(channel_id: str) -> str:
+    if not channel_id:
+        return ""
+    try:
+        result = get_client().conversations_info(channel=channel_id)
+        ch = result.get("channel") or {}
+        name = (ch.get("name") or "").strip()
+        if name:
+            return f"#{name}"
+        return channel_id
+    except Exception:
+        return channel_id
+
+
+@cache
 def get_user_display_name(user_id: str) -> str:
     if not user_id:
         return ""

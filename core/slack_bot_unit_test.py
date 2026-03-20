@@ -52,7 +52,7 @@ class TestComposeSystemPrompt:
         prompt = compose_system_prompt(THREAD_3, "", cross_rag_results=cross)
         assert "Cross-Channel Context" in prompt
         assert "cross-channel info" in prompt
-        assert "[eng]" in prompt
+        assert "Channel id: eng" in prompt
 
     def test_prompt_includes_examples(self):
         examples = [{"question": "How?", "answer": "Like this."}]
@@ -69,8 +69,8 @@ class TestComposeSystemPrompt:
         assert prompt.index("Skills") < prompt.index("Relevant Channel Context")
         assert prompt.index("Relevant Channel Context") < prompt.index("Cross-Channel Context")
         assert prompt.index("Cross-Channel Context") < prompt.index("Example Replies")
-        assert prompt.index("Example Replies") < prompt.index("Thread")
-        assert prompt.index("Thread") < prompt.index("Instruction")
+        assert prompt.index("Example Replies") < prompt.index("## Thread")
+        assert prompt.index("## Thread") < prompt.index("## Instruction")
 
 
 class TestSelectSkills:
@@ -141,6 +141,8 @@ class TestPrepareDraft:
         mock_rag.query_channel.return_value = [{"text": "channel rag"}]
         mock_rag.missing_channels.return_value = []
         mock_rag.query_cross_channel.return_value = [{"text": "cross rag", "channel": "eng"}]
+        mock_rag.format_rag_context_block.return_value = "unknown [-]: channel rag"
+        mock_rag.format_cross_channel_rag_text.return_value = "unknown [-]: cross rag"
         mock_llm.generate.return_value = "Full draft"
 
         original = list(settings.rag.cross_channel)
