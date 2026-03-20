@@ -31,7 +31,12 @@ PRODUCT_MESSAGES = [
 ]
 
 
+def _prep_slack_mock(mock_slack):
+    mock_slack.get_user_display_name.return_value = ""
+
+
 def _build_channel(channel_id, messages, mock_llm, mock_slack):
+    _prep_slack_mock(mock_slack)
     mock_slack.read_channel_history.return_value = messages
     mock_llm.generate.return_value = "summary"
     slack_rag.build(channel_id)
@@ -41,6 +46,7 @@ class TestBuild:
     @patch("common.slack.slack_rag.slack_rag.slack_api")
     @patch("common.slack.slack_rag.slack_rag.llm_client")
     def test_build_fetches_from_checkpoint(self, mock_llm, mock_slack):
+        _prep_slack_mock(mock_slack)
         mock_slack.read_channel_history.return_value = CHANNEL_MESSAGES[:3]
         mock_llm.generate.side_effect = lambda p: f"Summary of: {p[-30:]}"
 
@@ -53,6 +59,7 @@ class TestBuild:
     @patch("common.slack.slack_rag.slack_rag.slack_api")
     @patch("common.slack.slack_rag.slack_rag.llm_client")
     def test_build_summarizes_each_message(self, mock_llm, mock_slack):
+        _prep_slack_mock(mock_slack)
         mock_slack.read_channel_history.return_value = CHANNEL_MESSAGES[:5]
         mock_llm.generate.return_value = "A summary"
 
@@ -61,7 +68,20 @@ class TestBuild:
 
     @patch("common.slack.slack_rag.slack_rag.slack_api")
     @patch("common.slack.slack_rag.slack_rag.llm_client")
+    def test_build_stores_from_name(self, mock_llm, mock_slack):
+        _prep_slack_mock(mock_slack)
+        mock_slack.get_user_display_name.side_effect = lambda uid: f"user_{uid}"
+        mock_slack.read_channel_history.return_value = CHANNEL_MESSAGES[:2]
+        mock_llm.generate.return_value = "summary"
+
+        slack_rag.build("C_names")
+        results = slack_rag.query_channel("C_names", "deployment", top_k=10)
+        assert results[0].get("from_name") == "user_U1"
+
+    @patch("common.slack.slack_rag.slack_rag.slack_api")
+    @patch("common.slack.slack_rag.slack_rag.llm_client")
     def test_build_inserts_into_qdrant(self, mock_llm, mock_slack):
+        _prep_slack_mock(mock_slack)
         mock_slack.read_channel_history.return_value = CHANNEL_MESSAGES[:3]
         mock_llm.generate.return_value = "Deployment issue summary"
 
@@ -73,6 +93,7 @@ class TestBuild:
     @patch("common.slack.slack_rag.slack_rag.slack_api")
     @patch("common.slack.slack_rag.slack_rag.llm_client")
     def test_build_failure_releases_lock(self, mock_llm, mock_slack):
+        _prep_slack_mock(mock_slack)
         mock_slack.read_channel_history.side_effect = Exception("API error")
 
         with pytest.raises(Exception):
@@ -87,6 +108,7 @@ class TestQuery:
     @patch("common.slack.slack_rag.slack_rag.slack_api")
     @patch("common.slack.slack_rag.slack_rag.llm_client")
     def test_query_returns_top_10(self, mock_llm, mock_slack):
+        _prep_slack_mock(mock_slack)
         mock_slack.read_channel_history.return_value = CHANNEL_MESSAGES
         mock_llm.generate.side_effect = lambda p: f"Summary about deployment {hash(p) % 100}"
 
@@ -135,6 +157,7 @@ class TestCrossChannel:
     @patch("common.slack.slack_rag.slack_rag.slack_api")
     @patch("common.slack.slack_rag.slack_rag.llm_client")
     def test_build_all_missing(self, mock_llm, mock_slack):
+        _prep_slack_mock(mock_slack)
         mock_slack.read_channel_history.return_value = ENGINEERING_MESSAGES[:2]
         mock_llm.generate.return_value = "summary"
 
@@ -148,6 +171,8 @@ class TestCrossChannel:
     @patch("common.slack.slack_rag.slack_rag.slack_api")
     @patch("common.slack.slack_rag.slack_rag.llm_client")
     def test_partial_failure(self, mock_llm, mock_slack):
+        _prep_slack_mock(mock_slack)
+
         def side_effect(channel_id, oldest=0, limit=1000):
             if channel_id == "ch_fail":
                 raise Exception("API error")
@@ -168,6 +193,7 @@ class TestStatus:
     @patch("common.slack.slack_rag.slack_rag.slack_api")
     @patch("common.slack.slack_rag.slack_rag.llm_client")
     def test_is_ready_after_build(self, mock_llm, mock_slack):
+        _prep_slack_mock(mock_slack)
         mock_slack.read_channel_history.return_value = CHANNEL_MESSAGES[:2]
         mock_llm.generate.return_value = "summary"
 
@@ -178,6 +204,7 @@ class TestStatus:
     @patch("common.slack.slack_rag.slack_rag.slack_api")
     @patch("common.slack.slack_rag.slack_rag.llm_client")
     def test_build_if_missing_skips_existing(self, mock_llm, mock_slack):
+        _prep_slack_mock(mock_slack)
         mock_slack.read_channel_history.return_value = CHANNEL_MESSAGES[:2]
         mock_llm.generate.return_value = "summary"
 
@@ -192,6 +219,7 @@ class TestIncrementalBuild:
     @patch("common.slack.slack_rag.slack_rag.slack_api")
     @patch("common.slack.slack_rag.slack_rag.llm_client")
     def test_second_build_only_summarizes_new_messages(self, mock_llm, mock_slack):
+        _prep_slack_mock(mock_slack)
         mock_slack.read_channel_history.return_value = CHANNEL_MESSAGES[:3]
         mock_llm.generate.return_value = "summary"
 
@@ -208,6 +236,7 @@ class TestIncrementalBuild:
     @patch("common.slack.slack_rag.slack_rag.slack_api")
     @patch("common.slack.slack_rag.slack_rag.llm_client")
     def test_no_new_messages_skips_summarization(self, mock_llm, mock_slack):
+        _prep_slack_mock(mock_slack)
         mock_slack.read_channel_history.return_value = CHANNEL_MESSAGES[:3]
         mock_llm.generate.return_value = "summary"
 
@@ -222,6 +251,7 @@ class TestScheduler:
     @patch("common.slack.slack_rag.slack_rag.slack_api")
     @patch("common.slack.slack_rag.slack_rag.llm_client")
     def test_schedule_periodic_build_triggers(self, mock_llm, mock_slack):
+        _prep_slack_mock(mock_slack)
         mock_slack.read_channel_history.return_value = CHANNEL_MESSAGES[:2]
         mock_llm.generate.return_value = "summary"
 

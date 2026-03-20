@@ -131,11 +131,13 @@ def _build_index(channel_id: str, checkpoint_seconds: float):
         if summary is None:
             continue
         vector = rag.embed_text(summary)
+        user_id = msg.get("user", "") or ""
         documents.append({
             "vector": vector,
             "text": summary,
             "original": msg.get("text", ""),
-            "from": msg.get("user", ""),
+            "from": user_id,
+            "from_name": slack_api.get_user_display_name(user_id),
             "ts": msg.get("ts", ""),
             "channel": channel_id,
         })

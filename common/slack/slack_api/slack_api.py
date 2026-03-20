@@ -5,6 +5,7 @@ import urllib.request
 import certifi
 from slack_sdk import WebClient
 
+from common.cache import cache
 from common.log import log
 from config.config import settings
 
@@ -38,6 +39,24 @@ def read_channel_history(channel_id: str, oldest: float = 0, limit: int = 1000) 
         channel=channel_id, oldest=str(oldest), limit=limit
     )
     return result["messages"]
+
+
+@cache
+def get_user_display_name(user_id: str) -> str:
+    if not user_id:
+        return ""
+    try:
+        result = get_client().users_info(user=user_id)
+        user = result.get("user") or {}
+        profile = user.get("profile") or {}
+        name = (profile.get("display_name") or "").strip()
+        if not name:
+            name = (user.get("real_name") or "").strip()
+        if not name:
+            name = (user.get("name") or "").strip()
+        return name
+    except Exception:
+        return ""
 
 
 @log

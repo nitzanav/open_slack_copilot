@@ -7,6 +7,10 @@ from common.rag import rag
 from common.slack.slack_rag import slack_rag
 
 
+def _prep_slack_mock(mock_slack):
+    mock_slack.get_user_display_name.return_value = ""
+
+
 @pytest.fixture(autouse=True)
 def fresh_qdrant():
     rag.set_client(QdrantClient(location=":memory:"))
@@ -33,6 +37,7 @@ class TestBuildThenQuery:
     @patch("common.slack.slack_rag.slack_rag.slack_api")
     @patch("common.slack.slack_rag.slack_rag.llm_client")
     def test_build_and_query_returns_results(self, mock_llm, mock_slack):
+        _prep_slack_mock(mock_slack)
         mock_slack.read_channel_history.return_value = CHANNEL_HISTORY
         mock_llm.generate.side_effect = lambda p: p.split("\n\n")[-1][:80]
 
@@ -45,6 +50,7 @@ class TestBuildThenQuery:
     @patch("common.slack.slack_rag.slack_rag.slack_api")
     @patch("common.slack.slack_rag.slack_rag.llm_client")
     def test_refresh_replaces_old_data(self, mock_llm, mock_slack):
+        _prep_slack_mock(mock_slack)
         mock_slack.read_channel_history.return_value = CHANNEL_HISTORY[:2]
         mock_llm.generate.return_value = "old summary"
         slack_rag.build("C_refresh")
@@ -63,6 +69,8 @@ class TestCrossChannelIntegration:
     @patch("common.slack.slack_rag.slack_rag.slack_api")
     @patch("common.slack.slack_rag.slack_rag.llm_client")
     def test_startup_to_query(self, mock_llm, mock_slack):
+        _prep_slack_mock(mock_slack)
+
         def history_side_effect(channel_id, oldest=0, limit=1000):
             if channel_id == "eng":
                 return ENGINEERING_HISTORY
@@ -80,6 +88,8 @@ class TestCrossChannelIntegration:
     @patch("common.slack.slack_rag.slack_rag.slack_api")
     @patch("common.slack.slack_rag.slack_rag.llm_client")
     def test_full_draft_with_channel_and_cross_channel(self, mock_llm, mock_slack):
+        _prep_slack_mock(mock_slack)
+
         def history_side_effect(channel_id, oldest=0, limit=1000):
             if channel_id == "eng":
                 return ENGINEERING_HISTORY
