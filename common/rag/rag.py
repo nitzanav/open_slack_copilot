@@ -148,21 +148,38 @@ def _storage_root() -> Path | None:
     return Path(raw) if raw else None
 
 
-def _inspect_all_readonly() -> dict:
-    """List collections and point counts without opening Qdrant (SQLite read-only)."""
+def _readonly_collection_entries() -> list[tuple[str, Path]]:
+    """(collection_name, storage.sqlite path) for on-disk local Qdrant."""
     root = _storage_root()
     if root is None or not root.is_dir():
-        return {}
+        return []
     coll_root = root / "collection"
     if not coll_root.is_dir():
-        return {}
-    out: dict[str, int] = {}
+        return []
+    out: list[tuple[str, Path]] = []
     for sub in sorted(coll_root.iterdir()):
         if not sub.is_dir():
             continue
         db = sub / "storage.sqlite"
-        if not db.is_file():
-            continue
+        if db.is_file():
+            out.append((sub.name, db))
+    return out
+
+
+def list_collection_names() -> list[str]:
+    """Collection names from the live client, or from disk if storage is locked."""
+    try:
+        return list_collections()
+    except Exception as e:
+        if is_storage_locked_error(e):
+            return [name for name, _ in _readonly_collection_entries()]
+        raise
+
+
+def _inspect_all_readonly() -> dict:
+    """List collections and point counts without opening Qdrant (SQLite read-only)."""
+    out: dict[str, int] = {}
+    for name, db in _readonly_collection_entries():
         try:
             con = sqlite3.connect(f"file:{db.resolve()}?mode=ro", uri=True)
             try:
@@ -171,7 +188,7 @@ def _inspect_all_readonly() -> dict:
                 con.close()
         except Exception:
             n = 0
-        out[sub.name] = n
+        out[name] = n
     return out
 
 

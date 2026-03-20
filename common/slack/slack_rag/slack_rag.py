@@ -116,9 +116,15 @@ def inspect_channel(channel_id: str, limit: int = 20) -> dict:
         raise
 
 
-def inspect_all_channels() -> dict:
-    """Return a summary of all channel RAG collections."""
-    return rag.inspect_all()
+def inspect_all_channels(limit_per_channel: int = 20) -> dict:
+    """Return per-channel RAG detail: counts and sample document payloads."""
+    out: dict[str, dict] = {}
+    for name in rag.list_collection_names():
+        if not name.startswith("slack_channel_"):
+            continue
+        channel_id = name.removeprefix("slack_channel_")
+        out[name] = inspect_channel(channel_id, limit=limit_per_channel)
+    return out
 
 
 def _safe_build(channel_id: str, checkpoint_seconds: float):
