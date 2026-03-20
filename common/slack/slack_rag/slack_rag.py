@@ -86,12 +86,34 @@ def missing_channels(channel_ids: list[str]) -> list[str]:
 def inspect_channel(channel_id: str, limit: int = 20) -> dict:
     """Return info about a channel's RAG: exists, doc count, and sample docs."""
     collection = _collection_name(channel_id)
-    return {
-        "collection": collection,
-        "exists": rag.collection_exists(collection),
-        "count": rag.count_documents(collection),
-        "documents": rag.scroll_documents(collection, limit=limit),
-    }
+    try:
+        client = rag.get_client()
+        exists = client.collection_exists(collection)
+        if not exists:
+            return {
+                "collection": collection,
+                "exists": False,
+                "count": 0,
+                "documents": [],
+            }
+        cnt = client.count(collection_name=collection).count
+        res = client.scroll(
+            collection_name=collection,
+            limit=limit,
+            with_payload=True,
+            with_vectors=False,
+        )
+        docs = [p.payload for p in res[0]]
+        return {
+            "collection": collection,
+            "exists": True,
+            "count": cnt,
+            "documents": docs,
+        }
+    except Exception as e:
+        if rag.is_storage_locked_error(e):
+            return rag.inspect_collection_readonly(collection, limit=limit)
+        raise
 
 
 def inspect_all_channels() -> dict:

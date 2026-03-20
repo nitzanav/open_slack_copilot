@@ -1,3 +1,5 @@
+import pickle
+import sqlite3
 import threading
 import uuid
 from pathlib import Path
@@ -134,10 +136,99 @@ def scroll_documents(collection: str, limit: int = 20) -> list[dict]:
     return [p.payload for p in result[0]]
 
 
+def is_storage_locked_error(exc: BaseException) -> bool:
+    """True when Qdrant local folder is open in another process (portalocker / RuntimeError)."""
+    if isinstance(exc, RuntimeError) and "already accessed" in str(exc):
+        return True
+    return type(exc).__name__ == "AlreadyLocked"
+
+
+def _storage_root() -> Path | None:
+    raw = _resolve_storage_path()
+    return Path(raw) if raw else None
+
+
+def _inspect_all_readonly() -> dict:
+    """List collections and point counts without opening Qdrant (SQLite read-only)."""
+    root = _storage_root()
+    if root is None or not root.is_dir():
+        return {}
+    coll_root = root / "collection"
+    if not coll_root.is_dir():
+        return {}
+    out: dict[str, int] = {}
+    for sub in sorted(coll_root.iterdir()):
+        if not sub.is_dir():
+            continue
+        db = sub / "storage.sqlite"
+        if not db.is_file():
+            continue
+        try:
+            con = sqlite3.connect(f"file:{db.resolve()}?mode=ro", uri=True)
+            try:
+                n = con.execute("SELECT count(*) FROM points").fetchone()[0]
+            finally:
+                con.close()
+        except Exception:
+            n = 0
+        out[sub.name] = n
+    return out
+
+
+def inspect_collection_readonly(collection: str, limit: int = 20) -> dict:
+    """Sample one collection via SQLite only (works while another process holds Qdrant lock)."""
+    root = _storage_root()
+    db = (root / "collection" / collection / "storage.sqlite") if root else None
+    if not db or not db.is_file():
+        return {
+            "collection": collection,
+            "exists": False,
+            "count": 0,
+            "documents": [],
+        }
+    try:
+        con = sqlite3.connect(f"file:{db.resolve()}?mode=ro", uri=True)
+        try:
+            count = con.execute("SELECT count(*) FROM points").fetchone()[0]
+            rows = con.execute(
+                "SELECT point FROM points LIMIT ?", (limit,)
+            ).fetchall()
+        finally:
+            con.close()
+    except Exception:
+        return {
+            "collection": collection,
+            "exists": False,
+            "count": 0,
+            "documents": [],
+        }
+    documents: list[dict] = []
+    for (blob,) in rows:
+        try:
+            pt = pickle.loads(blob)
+            pl = getattr(pt, "payload", None)
+            if isinstance(pl, dict):
+                documents.append(pl)
+        except Exception:
+            continue
+    return {
+        "collection": collection,
+        "exists": True,
+        "count": count,
+        "documents": documents,
+    }
+
+
 def inspect_all() -> dict:
     """Return a summary of all collections and their document counts."""
-    collections = list_collections()
-    return {name: count_documents(name) for name in collections}
+    try:
+        client = get_client()
+        names = [c.name for c in client.get_collections().collections]
+        return {name: client.count(collection_name=name).count for name in names}
+    except Exception as e:
+        if is_storage_locked_error(e):
+            return _inspect_all_readonly()
+        raise
 
 
 def _build_filter(filters: dict) -> Filter:
