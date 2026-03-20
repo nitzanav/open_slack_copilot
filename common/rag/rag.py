@@ -1,5 +1,6 @@
 import threading
 import uuid
+from pathlib import Path
 
 from fastembed import TextEmbedding
 
@@ -13,11 +14,32 @@ _embedder: TextEmbedding | None = None
 _locks: dict[str, threading.Lock] = {}
 _locks_guard = threading.Lock()
 
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
+
+def _resolve_storage_path() -> str | None:
+    try:
+        from config.config import settings
+        raw = settings.get("rag.storage_path", None)
+    except Exception:
+        raw = None
+    if not raw or raw == ":memory:":
+        return None
+    path = Path(raw)
+    if not path.is_absolute():
+        path = _PROJECT_ROOT / path
+    path.mkdir(parents=True, exist_ok=True)
+    return str(path)
+
 
 def get_client() -> QdrantClient:
     global _client
     if _client is None:
-        _client = QdrantClient(location=":memory:")
+        storage = _resolve_storage_path()
+        if storage:
+            _client = QdrantClient(path=storage)
+        else:
+            _client = QdrantClient(location=":memory:")
     return _client
 
 
@@ -93,6 +115,29 @@ def acquire_lock(key: str) -> threading.Lock:
         if key not in _locks:
             _locks[key] = threading.Lock()
         return _locks[key]
+
+
+def list_collections() -> list[str]:
+    return [c.name for c in get_client().get_collections().collections]
+
+
+def count_documents(collection: str) -> int:
+    if not collection_exists(collection):
+        return 0
+    return get_client().count(collection_name=collection).count
+
+
+def scroll_documents(collection: str, limit: int = 20) -> list[dict]:
+    if not collection_exists(collection):
+        return []
+    result = get_client().scroll(collection_name=collection, limit=limit, with_payload=True, with_vectors=False)
+    return [p.payload for p in result[0]]
+
+
+def inspect_all() -> dict:
+    """Return a summary of all collections and their document counts."""
+    collections = list_collections()
+    return {name: count_documents(name) for name in collections}
 
 
 def _build_filter(filters: dict) -> Filter:

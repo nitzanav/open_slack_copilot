@@ -11,5 +11,6 @@ llm:
 
 rag:
   checkpoint_duration: "30d"
+  storage_path: ".rag_storage"
   cross_channel: []
   slack: []

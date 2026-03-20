@@ -208,3 +208,6 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
  .cursor/
+
+# RAG local storage
+.rag_storage/

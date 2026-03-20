@@ -83,6 +83,22 @@ def missing_channels(channel_ids: list[str]) -> list[str]:
     return [ch for ch in channel_ids if not is_ready(ch)]
 
 
+def inspect_channel(channel_id: str, limit: int = 20) -> dict:
+    """Return info about a channel's RAG: exists, doc count, and sample docs."""
+    collection = _collection_name(channel_id)
+    return {
+        "collection": collection,
+        "exists": rag.collection_exists(collection),
+        "count": rag.count_documents(collection),
+        "documents": rag.scroll_documents(collection, limit=limit),
+    }
+
+
+def inspect_all_channels() -> dict:
+    """Return a summary of all channel RAG collections."""
+    return rag.inspect_all()
+
+
 def _safe_build(channel_id: str, checkpoint_seconds: float):
     try:
         build(channel_id, checkpoint_seconds)
