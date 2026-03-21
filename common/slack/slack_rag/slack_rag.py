@@ -1,15 +1,15 @@
 import time
 import threading
 
-from common.llm.llm_client import llm_client
 from common.rag import rag
 from common.slack.slack_api import slack_api
-
-SUMMARIZE_PROMPT = "Summarize this Slack message in one concise sentence:\n\n{text}"
 
 _last_indexed_ts: dict[str, str] = {}
 _scheduler_threads: list[threading.Thread] = []
 _scheduler_stop = threading.Event()
+
+# Index only normal messages (no subtype) plus these subtypes.
+_RAG_INDEX_ALLOWED_SUBTYPES = frozenset({"file_share", "bot_message"})
 
 
 def query_channel(channel_id: str, thread_context: str, top_k: int = 10,
@@ -155,15 +155,17 @@ def _build_index(channel_id: str, checkpoint_seconds: float):
 
     documents = []
     for msg in new_messages:
-        summary = _summarize_message(msg)
-        if summary is None:
+        if not _slack_message_should_index(msg):
             continue
-        vector = rag.embed_text(summary)
+        raw = (msg.get("text") or "").strip()
+        if not raw:
+            continue
+        text = _index_text_with_reactions(raw, msg)
+        vector = rag.embed_text(text)
         user_id = msg.get("user", "") or ""
         documents.append({
             "vector": vector,
-            "text": summary,
-            "original": msg.get("text", ""),
+            "text": text,
             "from": user_id,
             "from_name": slack_api.get_user_display_name(user_id),
             "ts": msg.get("ts", ""),
@@ -188,14 +190,39 @@ def _filter_new_messages(messages: list[dict], last_ts: str | None) -> list[dict
     return [m for m in messages if m.get("ts", "0") > last_ts]
 
 
-def _summarize_message(msg: dict) -> str | None:
-    text = msg.get("text", "").strip()
-    if not text:
-        return None
-    try:
-        return llm_client.generate(SUMMARIZE_PROMPT.format(text=text))
-    except Exception:
-        return None
+def _slack_message_should_index(msg: dict) -> bool:
+    subtype = (msg.get("subtype") or "").strip()
+    if not subtype:
+        return True
+    return subtype in _RAG_INDEX_ALLOWED_SUBTYPES
+
+
+def _index_text_with_reactions(body: str, msg: dict) -> str:
+    """Keep reaction signal in the stored / embedded text (Slack adds no subtype for reactions)."""
+    reactions = msg.get("reactions")
+    if not reactions:
+        return body
+    parts: list[str] = []
+    for r in reactions:
+        if not isinstance(r, dict):
+            continue
+        name = (r.get("name") or "").strip()
+        if not name:
+            continue
+        count = r.get("count")
+        if count is None:
+            users = r.get("users")
+            count = len(users) if isinstance(users, list) else 0
+        try:
+            n = int(count)
+        except (TypeError, ValueError):
+            n = 0
+        if n > 0:
+            parts.append(f":{name}: ×{n}")
+    if not parts:
+        return body
+    parts.sort()
+    return f"{body}\n[Reactions: {', '.join(parts)}]"
 
 
 def _deduplicate_and_rank(results: list[dict], query_text: str, top_k: int) -> list[dict]:
@@ -235,7 +262,7 @@ def _ts_display(ts: str) -> str:
 
 
 def _message_body(r: dict) -> str:
-    return (r.get("original") or r.get("text") or "").strip()
+    return (r.get("text") or "").strip()
 
 
 def format_rag_context_block(

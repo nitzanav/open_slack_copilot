@@ -1,4 +1,4 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 from qdrant_client import QdrantClient
@@ -35,11 +35,9 @@ ENGINEERING_HISTORY = [
 
 class TestBuildThenQuery:
     @patch("common.slack.slack_rag.slack_rag.slack_api")
-    @patch("common.slack.slack_rag.slack_rag.llm_client")
-    def test_build_and_query_returns_results(self, mock_llm, mock_slack):
+    def test_build_and_query_returns_results(self, mock_slack):
         _prep_slack_mock(mock_slack)
         mock_slack.read_channel_history.return_value = CHANNEL_HISTORY
-        mock_llm.generate.side_effect = lambda p: p.split("\n\n")[-1][:80]
 
         slack_rag.build("C_int")
         results = slack_rag.query_channel("C_int", "deployment issue")
@@ -48,17 +46,14 @@ class TestBuildThenQuery:
         assert all("text" in r for r in results)
 
     @patch("common.slack.slack_rag.slack_rag.slack_api")
-    @patch("common.slack.slack_rag.slack_rag.llm_client")
-    def test_refresh_replaces_old_data(self, mock_llm, mock_slack):
+    def test_refresh_replaces_old_data(self, mock_slack):
         _prep_slack_mock(mock_slack)
         mock_slack.read_channel_history.return_value = CHANNEL_HISTORY[:2]
-        mock_llm.generate.return_value = "old summary"
         slack_rag.build("C_refresh")
 
         old_results = slack_rag.query_channel("C_refresh", "anything", top_k=100)
 
         mock_slack.read_channel_history.return_value = CHANNEL_HISTORY
-        mock_llm.generate.return_value = "new summary"
         slack_rag.build("C_refresh")
 
         new_results = slack_rag.query_channel("C_refresh", "anything", top_k=100)
@@ -67,16 +62,15 @@ class TestBuildThenQuery:
 
 class TestCrossChannelIntegration:
     @patch("common.slack.slack_rag.slack_rag.slack_api")
-    @patch("common.slack.slack_rag.slack_rag.llm_client")
-    def test_startup_to_query(self, mock_llm, mock_slack):
+    def test_startup_to_query(self, mock_slack):
         _prep_slack_mock(mock_slack)
 
         def history_side_effect(channel_id, oldest=0, limit=1000):
             if channel_id == "eng":
                 return ENGINEERING_HISTORY
             return CHANNEL_HISTORY
+
         mock_slack.read_channel_history.side_effect = history_side_effect
-        mock_llm.generate.return_value = "summary"
 
         threads = slack_rag.build_all_missing(["eng", "support"])
         for t in threads:
@@ -86,16 +80,15 @@ class TestCrossChannelIntegration:
         assert len(results) > 0
 
     @patch("common.slack.slack_rag.slack_rag.slack_api")
-    @patch("common.slack.slack_rag.slack_rag.llm_client")
-    def test_full_draft_with_channel_and_cross_channel(self, mock_llm, mock_slack):
+    def test_full_draft_with_channel_and_cross_channel(self, mock_slack):
         _prep_slack_mock(mock_slack)
 
         def history_side_effect(channel_id, oldest=0, limit=1000):
             if channel_id == "eng":
                 return ENGINEERING_HISTORY
             return CHANNEL_HISTORY
+
         mock_slack.read_channel_history.side_effect = history_side_effect
-        mock_llm.generate.return_value = "summary"
 
         slack_rag.build("support")
         slack_rag.build("eng")
