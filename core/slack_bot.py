@@ -17,11 +17,21 @@ from common.tools.prompt_scheduler import reload_jobs_from_disk, shutdown_schedu
 from config.config import settings, parse_duration_seconds
 
 
+def _get_bot_user_id() -> str | None:
+    try:
+        return slack_api.get_client().auth_test()["user_id"]
+    except Exception:
+        return None
+
+
 def start():
     app = slack_listener.create_app()
     slack_listener_with_threads.register_dm_confirmation_handlers(app)
     slack_listener_with_threads.register_copilot_command(app, _handle_copilot)
     slack_listener_with_threads.register_copilot_shortcut(app, _handle_copilot)
+    slack_listener_with_threads.register_copilot_app_mention(
+        app, _handle_copilot, bot_user_id=_get_bot_user_id(),
+    )
     _build_cross_channel_rags()
     _start_periodic_rag_schedules()
     start_scheduler()
@@ -40,6 +50,7 @@ def _handle_copilot(
     user_id: str,
     user_text: str,
     channel_name: str | None = None,
+    thread_messages: list[dict] | None = None,
 ):
     try:
         draft = prepare_draft(
@@ -48,6 +59,7 @@ def _handle_copilot(
             user_id,
             user_text,
             channel_name=channel_name,
+            thread_messages=thread_messages,
         )
         slack_api.send_ephemeral(channel_id, thread_ts, user_id, draft)
     except ThreadFetchError:

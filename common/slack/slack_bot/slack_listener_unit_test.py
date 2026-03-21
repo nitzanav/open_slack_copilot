@@ -1,6 +1,7 @@
 from unittest.mock import patch, MagicMock
 
 from common.slack.slack_bot.slack_listener_with_threads import (
+    register_copilot_app_mention,
     register_copilot_command,
     register_copilot_shortcut,
     _extract_thread_ts,
@@ -15,6 +16,10 @@ def _get_registered_handler(app: MagicMock):
 def _get_registered_shortcut_handler(app: MagicMock):
     """Extract the function passed to @app.shortcut() decorator."""
     return app.shortcut.return_value.call_args[0][0]
+
+
+def _get_registered_app_mention_handler(app: MagicMock):
+    return app.event.return_value.call_args[0][0]
 
 
 class TestExtractThreadTs:
@@ -76,10 +81,13 @@ class TestRegisterCopilotShortcut:
         register_copilot_shortcut(app, MagicMock())
         app.shortcut.assert_called_once_with("draft_with_copilot")
 
+    @patch("common.slack.slack_bot.slack_listener_with_threads.resolve_copilot_slack_context")
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
-    def test_shortcut_handler_called_with_thread_data(self, mock_slack_api):
+    def test_shortcut_handler_called_with_thread_data(self, mock_slack_api, mock_resolve):
         app = MagicMock()
         handler = MagicMock()
+        msgs = [{"user": "U1", "text": "hello"}]
+        mock_resolve.return_value = ("1516229200.000000", msgs)
 
         register_copilot_shortcut(app, handler)
         registered_fn = _get_registered_shortcut_handler(app)
@@ -91,15 +99,19 @@ class TestRegisterCopilotShortcut:
         }
         registered_fn(ack=MagicMock(), shortcut=shortcut, client=MagicMock())
 
+        mock_resolve.assert_called_once_with("C1", shortcut["message"])
         handler.assert_called_once_with(
             channel_id="C1", thread_ts="1516229200.000000", user_id="U1",
-            user_text="", channel_name="team-chat",
+            user_text="", thread_messages=msgs, channel_name="team-chat",
         )
 
+    @patch("common.slack.slack_bot.slack_listener_with_threads.resolve_copilot_slack_context")
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
-    def test_shortcut_in_channel_message_uses_message_ts_as_thread(self, mock_slack_api):
+    def test_shortcut_in_channel_message_uses_message_ts_as_thread(self, mock_slack_api, mock_resolve):
         app = MagicMock()
         handler = MagicMock()
+        msgs = [{"user": "U2", "text": "root msg"}]
+        mock_resolve.return_value = ("1516229207.000133", msgs)
 
         register_copilot_shortcut(app, handler)
         registered_fn = _get_registered_shortcut_handler(app)
@@ -111,7 +123,128 @@ class TestRegisterCopilotShortcut:
         }
         registered_fn(ack=MagicMock(), shortcut=shortcut, client=MagicMock())
 
+        mock_resolve.assert_called_once_with("C2", shortcut["message"])
         handler.assert_called_once_with(
             channel_id="C2", thread_ts="1516229207.000133", user_id="U1",
-            user_text="", channel_name=None,
+            user_text="", thread_messages=msgs, channel_name=None,
+        )
+
+
+class TestRegisterCopilotAppMention:
+    @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
+    def test_registers_app_mention_event(self, mock_slack_api):
+        app = MagicMock()
+        register_copilot_app_mention(app, MagicMock(), bot_user_id="UBOT")
+        app.event.assert_called_once_with("app_mention")
+
+    @patch("common.slack.slack_bot.slack_listener_with_threads.resolve_copilot_slack_context")
+    @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
+    def test_mention_root_uses_resolve_and_handler(self, mock_slack_api, mock_resolve):
+        app = MagicMock()
+        handler = MagicMock()
+        msgs = [{"text": "older"}, {"text": "newer"}]
+        mock_resolve.return_value = ("111.222", msgs)
+
+        register_copilot_app_mention(app, handler, bot_user_id="UBOT")
+        registered_fn = _get_registered_app_mention_handler(app)
+
+        event = {
+            "type": "app_mention",
+            "channel": "C9",
+            "user": "UHUMAN",
+            "text": "<@UBOT> make it brief",
+            "ts": "111.222",
+        }
+        registered_fn(event=event)
+
+        mock_resolve.assert_called_once_with("C9", {"ts": "111.222"})
+        handler.assert_called_once_with(
+            channel_id="C9",
+            thread_ts="111.222",
+            user_id="UHUMAN",
+            user_text="make it brief",
+            thread_messages=msgs,
+            channel_name=None,
+        )
+
+    @patch("common.slack.slack_bot.slack_listener_with_threads.resolve_copilot_slack_context")
+    @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
+    def test_mention_in_thread_passes_thread_ts(self, mock_slack_api, mock_resolve):
+        app = MagicMock()
+        handler = MagicMock()
+        msgs = [{"text": "in thread"}]
+        mock_resolve.return_value = ("100.000", msgs)
+
+        register_copilot_app_mention(app, handler, bot_user_id="UBOT")
+        registered_fn = _get_registered_app_mention_handler(app)
+
+        event = {
+            "type": "app_mention",
+            "channel": "C9",
+            "user": "UHUMAN",
+            "text": "<@UBOT>",
+            "ts": "101.000",
+            "thread_ts": "100.000",
+        }
+        registered_fn(event=event)
+
+        mock_resolve.assert_called_once_with(
+            "C9", {"ts": "101.000", "thread_ts": "100.000"},
+        )
+
+    @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
+    def test_mention_skips_subtype(self, mock_slack_api):
+        app = MagicMock()
+        handler = MagicMock()
+        register_copilot_app_mention(app, handler, bot_user_id="UBOT")
+        registered_fn = _get_registered_app_mention_handler(app)
+
+        registered_fn(event={
+            "type": "app_mention",
+            "subtype": "bot_message",
+            "channel": "C9",
+            "user": "UBOT",
+            "text": "<@UBOT>",
+            "ts": "1.0",
+        })
+        handler.assert_not_called()
+
+    @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
+    def test_mention_skips_own_bot_user(self, mock_slack_api):
+        app = MagicMock()
+        handler = MagicMock()
+        register_copilot_app_mention(app, handler, bot_user_id="UBOT")
+        registered_fn = _get_registered_app_mention_handler(app)
+
+        registered_fn(event={
+            "type": "app_mention",
+            "channel": "C9",
+            "user": "UBOT",
+            "text": "<@UBOT> hi",
+            "ts": "1.0",
+        })
+        handler.assert_not_called()
+
+    @patch("common.slack.slack_bot.slack_listener_with_threads.resolve_copilot_slack_context")
+    @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
+    def test_mention_resolve_error_sends_ephemeral(self, mock_slack_api, mock_resolve):
+        from common.slack.copilot_pipeline import ThreadFetchError
+
+        mock_resolve.side_effect = ThreadFetchError("nope")
+        app = MagicMock()
+        register_copilot_app_mention(app, MagicMock(), bot_user_id="UBOT")
+        registered_fn = _get_registered_app_mention_handler(app)
+
+        registered_fn(event={
+            "type": "app_mention",
+            "channel": "C9",
+            "user": "UHUMAN",
+            "text": "<@UBOT>",
+            "ts": "7.0",
+            "thread_ts": "6.0",
+        })
+
+        mock_slack_api.send_ephemeral.assert_called_once_with(
+            "C9", "6.0", "UHUMAN",
+            "Add me to this channel first. /invite @CoPilot",
         )

@@ -34,6 +34,37 @@ def fetch_thread_messages(channel_id: str, thread_ts: str) -> list[dict]:
         raise ThreadFetchError(str(exc)) from exc
 
 
+def get_copilot_channel_context_limit() -> int:
+    raw = settings.slack_bot.get("copilot_channel_context_limit", 30)
+    try:
+        return max(1, int(raw))
+    except (TypeError, ValueError):
+        return 30
+
+
+def fetch_channel_tail_messages(
+    channel_id: str, limit: int | None = None,
+) -> list[dict]:
+    """Recent channel messages in chronological order (oldest first)."""
+    try:
+        lim = limit if limit is not None else get_copilot_channel_context_limit()
+        raw = slack_api.read_channel_history(channel_id, limit=lim)
+        return list(reversed(raw))
+    except Exception as exc:
+        raise ThreadFetchError(str(exc)) from exc
+
+
+def resolve_copilot_slack_context(
+    channel_id: str, message: dict,
+) -> tuple[str, list[dict]]:
+    """Anchor ts for ephemerals + messages for the LLM (channel tail vs thread)."""
+    ts = message["ts"]
+    thread_ts = message.get("thread_ts")
+    if not thread_ts:
+        return ts, fetch_channel_tail_messages(channel_id)
+    return thread_ts, fetch_thread_messages(channel_id, thread_ts)
+
+
 def prepare_draft(
     channel_id: str,
     thread_ts: str,
@@ -42,8 +73,10 @@ def prepare_draft(
     channel_name: str | None = None,
     tools: list[dict] | None = None,
     tool_dispatch: Callable[[str, str], str] | None = None,
+    thread_messages: list[dict] | None = None,
 ) -> str:
-    thread_messages = fetch_thread_messages(channel_id, thread_ts)
+    if thread_messages is None:
+        thread_messages = fetch_thread_messages(channel_id, thread_ts)
     skills = select_skills(thread_messages, user_text)
     thread_text = _thread_messages_text(thread_messages)
     rag_results = fetch_rag_context(channel_id, thread_ts, user_id, thread_messages)

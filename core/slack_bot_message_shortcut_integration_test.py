@@ -87,13 +87,13 @@ class TestMessageShortcutEndToEnd:
                 "C1", "1516229200.000000", "U1", "Generated draft from shortcut"
             )
 
-    @patch("common.slack.copilot_pipeline.fetch_thread_messages")
+    @patch("common.slack.copilot_pipeline.fetch_channel_tail_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
     @patch("common.slack.copilot_pipeline.llm_client")
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
-    def test_shortcut_channel_message_uses_message_ts(self, mock_slack_api, mock_llm, mock_pd, mock_rag, mock_fetch):
-        mock_fetch.return_value = THREAD_3
+    def test_shortcut_channel_message_uses_message_ts(self, mock_slack_api, mock_llm, mock_pd, mock_rag, mock_tail):
+        mock_tail.return_value = THREAD_3
         mock_llm.agent_tool_loop.return_value = "Draft for channel message"
         _mock_bot_deps(mock_llm, mock_pd, mock_rag)
 
@@ -111,7 +111,7 @@ class TestMessageShortcutEndToEnd:
         with patch("core.slack_bot.slack_api") as mock_core_slack:
             registered_fn(ack=MagicMock(), shortcut=shortcut, client=MagicMock())
 
-            mock_fetch.assert_called_once_with("C1", "1516229207.000133")
+            mock_tail.assert_called_once_with("C1")
             mock_core_slack.send_ephemeral.assert_called_once_with(
                 "C1", "1516229207.000133", "U1", "Draft for channel message"
             )

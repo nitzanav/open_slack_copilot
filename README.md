@@ -24,6 +24,16 @@ Go to a message you were mentioned in (or any message you want to draft a reply 
 4. Expect an ephemeral message from the bot with the suggested reply.
 5. Click **Send** or **Revise**.
 
+### Mention @CoPilot
+
+In a channel where the app is invited, you can **@mention** the bot (for example **@CoPilot**) on a message:
+
+1. Type your mention in the message (optionally add instructions after it, same idea as text after `/copilot`).
+2. Send the message.
+3. You get an **ephemeral** draft in the thread under that message, like the shortcut flow.
+
+**Context**: On a **channel root** message (not in a thread), the draft uses the most recent messages in the channel (see `copilot_channel_context_limit` in [`config/default.yaml`](config/default.yaml)). **Inside a thread**, the draft uses that thread’s messages.
+
 ---
 
 ## Install the Slack App

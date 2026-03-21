@@ -163,6 +163,28 @@ class TestPrepareDraft:
             settings.set("rag.cross_channel", original)
 
 
+class TestPrepareDraftPreloadedMessages:
+    @patch("common.slack.copilot_pipeline.fetch_thread_messages")
+    @patch("common.slack.copilot_pipeline.slack_rag")
+    @patch("common.slack.copilot_pipeline.progressive_disclosure")
+    @patch("common.slack.copilot_pipeline.llm_client")
+    @patch("common.slack.copilot_pipeline.slack_api")
+    def test_skips_fetch_when_thread_messages_provided(
+        self, mock_slack, mock_llm, mock_pd, mock_rag, mock_fetch,
+    ):
+        mock_pd.select_skills.return_value = []
+        mock_pd.get_default_instruction.return_value = "default"
+        mock_rag.is_ready.return_value = True
+        mock_rag.query_channel.return_value = []
+        mock_rag.missing_channels.return_value = []
+        mock_rag.query_cross_channel.return_value = []
+        mock_llm.agent_tool_loop.return_value = "ok"
+
+        result = prepare_draft("C", "T1", "U1", "", thread_messages=THREAD_3)
+        assert result == "ok"
+        mock_fetch.assert_not_called()
+
+
 class TestHandleCopilot:
     @patch("common.slack.copilot_pipeline.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
