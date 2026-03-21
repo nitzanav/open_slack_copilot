@@ -17,7 +17,7 @@ SEND_SLACK_PM_TOOL = {
             "properties": {
                 "user": {
                     "type": "string",
-                    "description": "Display name, username, or Slack user id (U… / W…)",
+                    "description": "Slack user id (U…) from the thread context. Falls back to display name lookup.",
                 },
                 "message": {"type": "string", "description": "DM body"},
             },

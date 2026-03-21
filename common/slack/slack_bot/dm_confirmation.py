@@ -1,4 +1,4 @@
-"""DM send confirmation: full message is shown in Slack blocks; Send reads it back from the signed interaction payload (no server-side pending map)."""
+"""DM send confirmation via Slack Block Kit ephemeral messages."""
 
 from __future__ import annotations
 
@@ -8,8 +8,7 @@ from common.log import log
 from common.slack.slack_api import slack_api
 from config.config import settings
 
-# Slack Block Kit: plain_text in a section is max 3000 chars; max 50 blocks per message.
-_PLAIN_CHUNK = 3000
+_PLAIN_CHUNK = 3000  # Slack plain_text section max
 _MAX_BODY_BLOCKS = 48  # header + actions + body <= 50
 
 BLOCK_HEADER = "dm_confirm_header"
@@ -22,95 +21,109 @@ def _owner_id() -> str | None:
     return oid or None
 
 
-def _chunk_plain_text(message: str) -> list[str]:
-    if not message:
-        return []
-    return [message[i : i + _PLAIN_CHUNK] for i in range(0, len(message), _PLAIN_CHUNK)]
+# ---------------------------------------------------------------------------
+# Parsing confirmation blocks back into message text
+# ---------------------------------------------------------------------------
+
+def parse_message_from_confirmation_blocks(blocks: list[dict]) -> str:
+    body_blocks = _filter_body_blocks(blocks)
+    sorted_blocks = _sort_by_block_index(body_blocks)
+    return _join_block_texts(sorted_blocks)
 
 
-def parse_message_from_confirmation_blocks(blocks: list[dict]) -> tuple[str | None, str | None]:
-    """Return (message, error). Message is concatenation of dm_confirm_body_* section texts."""
-    body_blocks = [
-        b
-        for b in blocks
-        if str(b.get("block_id") or "").startswith(BLOCK_BODY_PREFIX)
-    ]
-    if not body_blocks:
-        return None, "Could not read message from confirmation."
+def _filter_body_blocks(blocks: list[dict]) -> list[dict]:
+    out = [b for b in blocks if str(b.get("block_id") or "").startswith(BLOCK_BODY_PREFIX)]
+    if not out:
+        raise _ConfirmationParseError("Could not read message from confirmation.")
+    return out
 
-    def sort_key(b: dict) -> int:
-        bid = str(b.get("block_id") or "")
+
+def _sort_by_block_index(blocks: list[dict]) -> list[dict]:
+    def index(b: dict) -> int:
         try:
-            return int(bid.split("_")[-1])
+            return int(str(b.get("block_id") or "").split("_")[-1])
         except (ValueError, IndexError):
             return 0
+    return sorted(blocks, key=index)
 
-    body_blocks.sort(key=sort_key)
-    parts: list[str] = []
-    for b in body_blocks:
-        txt = b.get("text") or {}
-        if txt.get("type") == "plain_text":
-            parts.append(str(txt.get("text") or ""))
-        elif txt.get("type") == "mrkdwn":
-            parts.append(str(txt.get("text") or ""))
+
+def _join_block_texts(blocks: list[dict]) -> str:
+    parts = [str((b.get("text") or {}).get("text") or "") for b in blocks]
     combined = "".join(parts)
     if not combined:
-        return None, "Could not read message from confirmation."
-    return combined, None
+        raise _ConfirmationParseError("Could not read message from confirmation.")
+    return combined
 
+
+class _ConfirmationParseError(Exception):
+    pass
+
+
+# ---------------------------------------------------------------------------
+# Building confirmation blocks
+# ---------------------------------------------------------------------------
 
 def _build_confirmation_blocks(
     target_label: str, message: str, target_user_id: str
-) -> tuple[list[dict] | None, str | None]:
-    """Returns (blocks, error_message)."""
-    chunks = _chunk_plain_text(message)
+) -> list[dict]:
+    body = _message_body_blocks(message)
+    return [
+        _header_block(target_label),
+        *body,
+        _actions_block(target_user_id),
+    ]
+
+
+def _header_block(target_label: str) -> dict:
+    return {
+        "type": "section",
+        "block_id": BLOCK_HEADER,
+        "text": {"type": "mrkdwn", "text": f"*Confirm direct message*\n*To:* {target_label}"},
+    }
+
+
+def _message_body_blocks(message: str) -> list[dict]:
+    chunks = [message[i : i + _PLAIN_CHUNK] for i in range(0, len(message), _PLAIN_CHUNK)] if message else []
     if len(chunks) > _MAX_BODY_BLOCKS:
-        return None, (
+        raise ValueError(
             f"Message is too long to confirm in Slack ({len(message)} chars; "
             f"max {_MAX_BODY_BLOCKS * _PLAIN_CHUNK})."
         )
-
-    blocks: list[dict] = [
+    return [
         {
             "type": "section",
-            "block_id": BLOCK_HEADER,
-            "text": {
-                "type": "mrkdwn",
-                "text": f"*Confirm direct message*\n*To:* {target_label}",
-            },
-        },
-    ]
-    for i, chunk in enumerate(chunks):
-        blocks.append(
-            {
-                "type": "section",
-                "block_id": f"{BLOCK_BODY_PREFIX}{i}",
-                "text": {"type": "plain_text", "text": chunk, "emoji": False},
-            }
-        )
-    blocks.append(
-        {
-            "type": "actions",
-            "block_id": BLOCK_ACTIONS,
-            "elements": [
-                {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": "Send"},
-                    "style": "primary",
-                    "action_id": "dm_confirm_send",
-                    "value": target_user_id,
-                },
-                {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": "Cancel"},
-                    "action_id": "dm_confirm_cancel",
-                    "value": "cancel",
-                },
-            ],
+            "block_id": f"{BLOCK_BODY_PREFIX}{i}",
+            "text": {"type": "plain_text", "text": chunk, "emoji": False},
         }
-    )
-    return blocks, None
+        for i, chunk in enumerate(chunks)
+    ]
 
+
+def _actions_block(target_user_id: str) -> dict:
+    return {
+        "type": "actions",
+        "block_id": BLOCK_ACTIONS,
+        "elements": [
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "Send"},
+                "style": "primary",
+                "action_id": "dm_confirm_send",
+                "value": target_user_id,
+            },
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "Cancel"},
+                "action_id": "dm_confirm_cancel",
+                "value": "cancel",
+            },
+        ],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
 
 @log
 def suggest_sending_dm(
@@ -123,12 +136,10 @@ def suggest_sending_dm(
     owner = _owner_id()
     if not owner:
         return "Error: slack_bot.config_owner_user_id is not set; cannot queue DM confirmation."
-
-    blocks, err = _build_confirmation_blocks(target_label, message, target_user_id)
-    if err:
-        return f"Error: {err}"
-    assert blocks is not None
-
+    try:
+        blocks = _build_confirmation_blocks(target_label, message, target_user_id)
+    except ValueError as e:
+        return f"Error: {e}"
     slack_api.send_ephemeral_blocks(
         channel_id, thread_ts, owner, "Confirm direct message", blocks
     )
@@ -147,10 +158,10 @@ def handle_send_action(body: dict) -> str:
         return "Missing recipient for this confirmation."
 
     blocks = body.get("message", {}).get("blocks") or []
-    msg, parse_err = parse_message_from_confirmation_blocks(blocks)
-    if parse_err:
-        return parse_err
-    assert msg is not None
+    try:
+        msg = parse_message_from_confirmation_blocks(blocks)
+    except _ConfirmationParseError as e:
+        return str(e)
 
     try:
         slack_api.send_dm(target_user_id, msg)
@@ -169,21 +180,17 @@ def register_dm_confirmation_handlers(app: App):
     def _on_send(ack, body, _client):
         ack()
         result = handle_send_action(body)
-        channel_id = body["channel"]["id"]
-        user_id = body["user"]["id"]
-        thread_ts = body.get("message", {}).get("thread_ts") or body.get("message", {}).get("ts")
-        slack_api.send_ephemeral(channel_id, thread_ts, user_id, result)
+        _reply_ephemeral(body, result)
 
     @app.action("dm_confirm_cancel")
     def _on_cancel(ack, body, _client):
         ack()
         result = handle_cancel_action(body)
-        channel_id = body["channel"]["id"]
-        user_id = body["user"]["id"]
-        thread_ts = body.get("message", {}).get("thread_ts") or body.get("message", {}).get("ts")
-        slack_api.send_ephemeral(channel_id, thread_ts, user_id, result)
+        _reply_ephemeral(body, result)
 
 
-def clear_pending_for_tests():
-    """No-op: pending state was removed; kept for any legacy test hooks."""
-    pass
+def _reply_ephemeral(body: dict, text: str):
+    channel_id = body["channel"]["id"]
+    user_id = body["user"]["id"]
+    thread_ts = body.get("message", {}).get("thread_ts") or body.get("message", {}).get("ts")
+    slack_api.send_ephemeral(channel_id, thread_ts, user_id, text)

@@ -45,10 +45,10 @@ def prepare_draft(
 ) -> str:
     thread_messages = fetch_thread_messages(channel_id, thread_ts)
     skills = select_skills(thread_messages, user_text)
-    thread_context = " ".join(m.get("text", "") for m in thread_messages[-5:])
+    thread_text = _thread_messages_text(thread_messages)
     rag_results = fetch_rag_context(channel_id, thread_ts, user_id, thread_messages)
     cross_rag_results = fetch_cross_channel_rag(
-        channel_id, thread_ts, user_id, thread_context
+        channel_id, thread_ts, user_id, thread_text
     )
     examples = load_examples()
     prompt = compose_system_prompt(
@@ -205,8 +205,7 @@ def fetch_rag_context(
                 "Preparing RAG for this channel, will update when done.",
             )
             slack_rag.build(channel_id, get_checkpoint_seconds())
-        thread_context = " ".join(m.get("text", "") for m in thread_messages[-5:])
-        return slack_rag.query_channel(channel_id, thread_context)
+        return slack_rag.query_channel(channel_id, _thread_messages_text(thread_messages))
     except Exception:
         return []
 
@@ -250,6 +249,10 @@ def get_checkpoint_seconds() -> float:
 
 def get_cross_channel_ids() -> list[str]:
     return list(settings.rag.cross_channel)
+
+
+def _thread_messages_text(thread_messages: list[dict]) -> str:
+    return " ".join(m.get("text", "") for m in thread_messages)
 
 
 def _collapse_blank_lines(text: str) -> str:

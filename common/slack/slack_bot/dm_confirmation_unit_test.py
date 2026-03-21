@@ -6,35 +6,28 @@ from common.slack.slack_bot import dm_confirmation as dm
 
 
 def _sample_blocks(message: str, uid: str = "U_TARGET") -> list[dict]:
-    chunks = dm._chunk_plain_text(message)
-    blocks, err = dm._build_confirmation_blocks("Alice", message, uid)
-    assert err is None
-    assert blocks is not None
+    blocks = dm._build_confirmation_blocks("Alice", message, uid)
     return blocks
 
 
 def test_parse_message_single_chunk():
     blocks = _sample_blocks("hello world")
-    msg, err = dm.parse_message_from_confirmation_blocks(blocks)
-    assert err is None
+    msg = dm.parse_message_from_confirmation_blocks(blocks)
     assert msg == "hello world"
 
 
 def test_parse_message_multichunk():
     long_text = "x" * 4500
     blocks = _sample_blocks(long_text)
-    msg, err = dm.parse_message_from_confirmation_blocks(blocks)
-    assert err is None
+    msg = dm.parse_message_from_confirmation_blocks(blocks)
     assert msg == long_text
     assert len(blocks) == 4  # header + 2 body + actions
 
 
 def test_build_blocks_rejects_overflow():
     too_long = "m" * (dm._MAX_BODY_BLOCKS * dm._PLAIN_CHUNK + 1)
-    blocks, err = dm._build_confirmation_blocks("Bob", too_long, "U1")
-    assert blocks is None
-    assert err is not None
-    assert "too long" in err.lower()
+    with pytest.raises(ValueError, match="too long"):
+        dm._build_confirmation_blocks("Bob", too_long, "U1")
 
 
 def test_handle_send_action_parses_and_sends():

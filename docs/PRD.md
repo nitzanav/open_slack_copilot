@@ -89,6 +89,43 @@
   - Don't validate inline — push validation into the called function
   - e.g. `prepareNextDraft()` → `getSlackClient()` → `readMessages()` → `chooseMessage()` → `prepareDraft()`
   - No `if messages is empty` — check inside `chooseMessage()`. No null check — handle inside `prepareDraft()`. Reconnect inside `getSlackClient()`. Read 3 lines of top-down logic, not 20 lines of checks.
+  - **Function names replace comments.** If you'd write a comment to explain what a block does, extract it into a function whose name *is* that explanation.
+  - **Do:**
+    ```python
+    def parse_message_from_confirmation_blocks(blocks):
+        body_blocks = _filter_body_blocks(blocks)
+        sorted_blocks = _sort_by_block_index(body_blocks)
+        return _join_block_texts(sorted_blocks)
+    ```
+  - **Don't:**
+    ```python
+    def parse_message_from_confirmation_blocks(blocks):
+        # filter to body blocks
+        body_blocks = [b for b in blocks if str(b.get("block_id") or "").startswith(PREFIX)]
+        if not body_blocks:
+            return None, "Could not read message."
+        # sort by index
+        def sort_key(b):
+            try: return int(str(b.get("block_id") or "").split("_")[-1])
+            except: return 0
+        body_blocks.sort(key=sort_key)
+        # join text
+        parts = []
+        for b in body_blocks:
+            txt = b.get("text") or {}
+            if txt.get("type") == "plain_text":
+                parts.append(str(txt.get("text") or ""))
+        combined = "".join(parts)
+        if not combined:
+            return None, "Could not read message."
+        return combined, None
+    ```
+  - Same for builders — compose from named building blocks:
+    ```python
+    def _build_confirmation_blocks(target_label, message, target_user_id):
+        body = _message_body_blocks(message)  # raises if too long
+        return [_header_block(target_label), *body, _actions_block(target_user_id)]
+    ```
 - **No noise** — no logs, no comments, no boilerplate
   - Logs: use `@log` decorator, function name = log message
   - Comments: only "why", never "what" or "how". Wrap small blocks as named chunks.
@@ -100,8 +137,37 @@
   - Name functions by *what* they do for the caller, not *how* — e.g. `agent_tool_loop` not `generate_with_tools`, `suggest_sending_dm` not `queue_pending_dm`
   - If a function only exists for one caller and the name doesn't make sense in isolation, it shouldn't exist
   - Delete dead code immediately — unused functions (e.g. `generate_json_response`) rot and confuse readers
-- **Validation pattern for tool handlers** — raise a private `_ValidationError`, catch at the top of the handler, return `{"error": msg}`
-  - Keeps the happy path flat and readable; avoids scattered early-return `json.dumps({"error": ...})` checks
+- **Validation pattern for tool handlers** — raise a private `_ValidationError`, catch once at the top
+  - **Do:**
+    ```python
+    def handle_tool_call(arguments_json):
+        try:
+            args = json.loads(arguments_json or "{}")
+            prompt = _require_str(args, "prompt")
+            cron = _require_str(args, "cron")
+            inv = _require_invocation_context()
+        except _ValidationError as e:
+            return json.dumps({"error": str(e)})
+        # happy path — no validation clutter
+        _write_job_to_disk(job_id, prompt, cron, inv)
+    ```
+  - **Don't:**
+    ```python
+    def handle_tool_call(arguments_json):
+        args = json.loads(arguments_json or "{}")
+        prompt = (args.get("prompt") or "").strip()
+        if not prompt:
+            return json.dumps({"error": "prompt is required"})
+        cron = (args.get("cron") or "").strip()
+        if not cron:
+            return json.dumps({"error": "cron is required"})
+        inv = get_invocation()
+        if not inv:
+            return json.dumps({"error": "No invocation context"})
+        if not inv.get("thread_ts"):
+            return json.dumps({"error": "Could not determine thread_ts"})
+        # actual logic buried after 12 lines of checks
+    ```
 - **Extract blocks of 6+ lines** into named functions that explain the *what*, hiding the *how*
   - e.g. `_write_job_to_disk(...)` instead of inline mkdir + write prompt + build meta dict + write json
   - e.g. `_append_assistant_tool_calls(...)` instead of inline dict construction

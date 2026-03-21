@@ -22,7 +22,7 @@ SELECTION_PROMPT = (
 
 @log
 def select_skills(skill_type: str, thread_messages: list[dict], user_text: str) -> list[str]:
-    entries = _all_skill_entries()
+    entries = _skill_entries_for_kind(skill_type)
     if not entries:
         return []
 
@@ -42,23 +42,17 @@ def get_default_instruction() -> str:
     return _BUNDLED_DEFAULT_INSTRUCTION
 
 
-def _all_skill_entries() -> list[tuple[str, str]]:
-    out: list[tuple[str, str]] = []
-    for kind in _SKILL_KINDS:
-        base = SKILLS_ROOT / kind
-        if not base.is_dir():
-            continue
-        for d in base.iterdir():
-            if d.is_dir() and (d / "SKILL.md").is_file():
-                ref = f"{kind}/{d.name}"
-                out.append((ref, (d / "SKILL.md").read_text().strip()))
-    return out
-
-
-def _load_skill_titles(skills_dir: Path) -> list[str]:
-    if not skills_dir.exists():
+def _skill_entries_for_kind(kind: str) -> list[tuple[str, str]]:
+    if kind not in _SKILL_KINDS:
         return []
-    return [d.name for d in skills_dir.iterdir() if d.is_dir() and (d / "SKILL.md").exists()]
+    base = SKILLS_ROOT / kind
+    if not base.is_dir():
+        return []
+    out: list[tuple[str, str]] = []
+    for d in base.iterdir():
+        if d.is_dir() and (d / "SKILL.md").is_file():
+            out.append((f"{kind}/{d.name}", (d / "SKILL.md").read_text().strip()))
+    return out
 
 
 def _parse_selection(response: str, valid_titles: list[str]) -> list[str]:
