@@ -5,33 +5,35 @@ from common.log import log
 from common.llm.llm_client import llm_client
 
 SKILLS_ROOT = Path.home() / ".open_slack_copilot" / "skills"
+_SKILL_KINDS = ("reply", "watcher")
 _BUNDLED_DEFAULT_INSTRUCTION = (Path(__file__).parent / "default_reply_instruction.md").read_text().strip()
 USER_DEFAULT_INSTRUCTION_PATH = Path.home() / ".open_slack_copilot" / "skills" / "reply" / "default.md"
 
 SELECTION_PROMPT = (
     "You are selecting relevant skills for drafting a Slack reply.\n"
     "Given the thread context and available skills, return a JSON array of "
-    "skill folder names that are relevant. Return [] if none match.\n\n"
+    "skill references that are relevant. Return [] if none match.\n"
+    "Each reference must be exactly as listed (kind/name).\n\n"
     "Available skills:\n{skill_list}\n\n"
     "Thread context:\n{thread_context}\n\n"
-    "Return ONLY a JSON array of skill names, e.g. [\"polite_reply\", \"technical_review\"]"
+    "Return ONLY a JSON array, e.g. [\"reply/polite_reply\", \"watcher/checklist\"]"
 )
 
 
 @log
 def select_skills(skill_type: str, thread_messages: list[dict], user_text: str) -> list[str]:
-    skills_dir = SKILLS_ROOT / skill_type
-    titles = _load_skill_titles(skills_dir)
-    if not titles:
+    entries = _all_skill_entries()
+    if not entries:
         return []
 
     thread_context = _summarize_context(thread_messages, user_text)
-    skill_list = "\n".join(f"- {t}" for t in titles)
+    skill_list = "\n".join(f"- {ref}" for ref, _ in entries)
     prompt = SELECTION_PROMPT.format(skill_list=skill_list, thread_context=thread_context)
 
     response = llm_client.generate(prompt)
-    selected = _parse_selection(response, titles)
-    return [_read_skill(skills_dir / name / "SKILL.md") for name in selected]
+    valid_refs = [ref for ref, _ in entries]
+    selected_refs = _parse_selection(response, valid_refs)
+    return [text for ref, text in entries if ref in selected_refs]
 
 
 def get_default_instruction() -> str:
@@ -40,14 +42,23 @@ def get_default_instruction() -> str:
     return _BUNDLED_DEFAULT_INSTRUCTION
 
 
+def _all_skill_entries() -> list[tuple[str, str]]:
+    out: list[tuple[str, str]] = []
+    for kind in _SKILL_KINDS:
+        base = SKILLS_ROOT / kind
+        if not base.is_dir():
+            continue
+        for d in base.iterdir():
+            if d.is_dir() and (d / "SKILL.md").is_file():
+                ref = f"{kind}/{d.name}"
+                out.append((ref, (d / "SKILL.md").read_text().strip()))
+    return out
+
+
 def _load_skill_titles(skills_dir: Path) -> list[str]:
     if not skills_dir.exists():
         return []
     return [d.name for d in skills_dir.iterdir() if d.is_dir() and (d / "SKILL.md").exists()]
-
-
-def _read_skill(path: Path) -> str:
-    return path.read_text().strip()
 
 
 def _parse_selection(response: str, valid_titles: list[str]) -> list[str]:
@@ -61,6 +72,7 @@ def _parse_selection(response: str, valid_titles: list[str]) -> list[str]:
 
 
 def _summarize_context(thread_messages: list[dict], user_text: str) -> str:
+    # TODO: instead of thread_messages[-5:] need to take first 10 and then last 10 and put in the middle something like "20 other messages..."
     lines = [f"<@{m.get('user', '?')}>: {m.get('text', '')}" for m in thread_messages[-5:]]
     if user_text:
         lines.append(f"User instruction: {user_text}")

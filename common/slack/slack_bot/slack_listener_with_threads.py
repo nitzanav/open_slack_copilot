@@ -2,6 +2,9 @@ from slack_bolt import App
 
 from common.log import log
 from common.slack.slack_api import slack_api
+from common.slack.slack_bot import dm_confirmation
+
+register_dm_confirmation_handlers = dm_confirmation.register_dm_confirmation_handlers
 
 
 def register_copilot_command(app: App, handler):
@@ -18,18 +21,11 @@ def register_copilot_command(app: App, handler):
             slack_api.send_ephemeral(channel_id, None, user_id, "Use /copilot inside a thread.")
             return
 
-        try:
-            thread_messages = slack_api.read_thread(channel_id, thread_ts)
-        except Exception:
-            slack_api.send_ephemeral(channel_id, thread_ts, user_id, "Add me to this channel first. /invite @CoPilot")
-            return
-
         handler(
             channel_id=channel_id,
             thread_ts=thread_ts,
             user_id=user_id,
             user_text=user_text,
-            thread_messages=thread_messages,
             channel_name=command.get("channel_name"),
         )
 
@@ -44,38 +40,15 @@ def register_copilot_shortcut(app: App, handler):
         user_id = shortcut["user"]["id"]
         message = shortcut["message"]
         thread_ts = message.get("thread_ts") or message["ts"]
-        response_url = shortcut.get("response_url")
-
-        try:
-            thread_messages = slack_api.read_thread(channel_id, thread_ts)
-        except Exception:
-            _send_channel_error(channel_id, thread_ts, user_id, response_url)
-            return
 
         handler(
             channel_id=channel_id,
             thread_ts=thread_ts,
             user_id=user_id,
             user_text="",
-            thread_messages=thread_messages,
             channel_name=shortcut["channel"].get("name"),
         )
 
 
 def _extract_thread_ts(command: dict) -> str | None:
     return command.get("thread_ts") or command.get("message_ts")
-
-
-def _send_channel_error(channel_id: str, thread_ts: str, user_id: str,
-                       response_url: str | None):
-    msg = "Add me to this channel first. /invite @CoPilot"
-    try:
-        slack_api.send_ephemeral(channel_id, thread_ts, user_id, msg)
-        return
-    except Exception:
-        pass
-    if response_url:
-        try:
-            slack_api.respond_ephemeral(response_url, msg)
-        except Exception:
-            pass

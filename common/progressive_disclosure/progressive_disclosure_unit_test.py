@@ -62,7 +62,7 @@ class TestSelectSkills:
         (skill_dir / "polite_reply").mkdir()
         (skill_dir / "polite_reply" / "SKILL.md").write_text("Be polite.")
 
-        mock_llm.generate.return_value = '["polite_reply"]'
+        mock_llm.generate.return_value = '["reply/polite_reply"]'
 
         with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
             result = select_skills("reply", THREAD, "")
@@ -77,7 +77,7 @@ class TestSelectSkills:
             (skill_dir / name).mkdir()
             (skill_dir / name / "SKILL.md").write_text(content)
 
-        mock_llm.generate.return_value = '["sk_a", "sk_b"]'
+        mock_llm.generate.return_value = '["reply/sk_a", "reply/sk_b"]'
 
         with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
             result = select_skills("reply", THREAD, "")

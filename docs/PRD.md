@@ -36,8 +36,9 @@
   - Build RAG of a specific channel
   - Keyword triggers — e.g. "answer like Dani on #support" → hybrid filter on `from`
   - Auto-checks if live RAG already exists & its status
-- **Scheduled skills** — some tasks need hourly/timed checks
+- **Scheduled prompts** — some tasks need hourly/timed checks
   - e.g. followup reminders need periodic scan to decide if to remind
+  - Scheduled prompts should use "watcher" skills as context
 
 ## `slack_bot.py` Milestones
 
@@ -96,6 +97,15 @@
 - **Short code** — take assumptions, skip unnecessary validations
   - No time to read code. Make it short.
 - **Meaningful names** — folders, files, functions, variables must be self-explanatory
+  - Name functions by *what* they do for the caller, not *how* — e.g. `agent_tool_loop` not `generate_with_tools`, `suggest_sending_dm` not `queue_pending_dm`
+  - If a function only exists for one caller and the name doesn't make sense in isolation, it shouldn't exist
+  - Delete dead code immediately — unused functions (e.g. `generate_json_response`) rot and confuse readers
+- **Validation pattern for tool handlers** — raise a private `_ValidationError`, catch at the top of the handler, return `{"error": msg}`
+  - Keeps the happy path flat and readable; avoids scattered early-return `json.dumps({"error": ...})` checks
+- **Extract blocks of 6+ lines** into named functions that explain the *what*, hiding the *how*
+  - e.g. `_write_job_to_disk(...)` instead of inline mkdir + write prompt + build meta dict + write json
+  - e.g. `_append_assistant_tool_calls(...)` instead of inline dict construction
+  - Large composers (like `compose_system_prompt`) should read as a sequence of named steps: `_format_skills_section`, `_format_channel_rag_section`, etc.
 - **Documentation** — concise `.md`, 2-7 bold-titled bullets, 2-10 words each
   - 1-7 sub-bullets per bullet
   - Don't explain obvious things — people/AI will ask or read code
@@ -193,11 +203,10 @@ common/                         # each file/folder = standalone decoupled packag
   agent/                        # LangGraph conversation + tool selection
   tools/
     build_slack_rag.py          # intent: "given my recent messages in #abc..."
-    skills_scheduler/
-      skills_scheduler.py       # cron-based, hourly/daily. Runs saved scheduled prompts sequentially
-                                # config in ~/.open_slack_copilot/scheduled_skills/skill123/SKILL.md
-      skills_scheduler.md
-      skills_scheduler_unit_test.py
+    prompt_scheduler/
+      prompt_scheduler.py       # cron-based, hourly/daily. Runs saved scheduled prompts sequentially
+                                # config in ~/.open_slack_copilot/scheduled_prompts/sched_<hex>/prompt.txt
+      prompt_scheduler_unit_test.py
     skill_repository.py         # add/list skills
                                 # natural language → save rule, confirm to user
                                 # stored in ~/.open_slack_copilot/skills/skill123/SKILL.md

@@ -4,6 +4,11 @@
 slack_bot:
   token: "@format {env[SLACK_BOT_TOKEN]}"
   app_token: "@format {env[SLACK_APP_TOKEN]}"
+  # Slack user ID (U…) who receives DM-send confirmations (scheduled checks and draft flow).
+  config_owner_user_id: ""
+
+scheduled_prompts:
+  storage_path: "~/.open_slack_copilot/scheduled_prompts"
 
 llm:
   model: "gpt-4o"

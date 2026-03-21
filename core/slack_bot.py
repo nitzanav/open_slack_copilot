@@ -1,164 +1,76 @@
-import json
-import re
-from pathlib import Path
-
 from common.log import log
-from common.llm.llm_client import llm_client
-from common.progressive_disclosure import progressive_disclosure
+from common.slack.copilot_pipeline import (
+    DEFAULT_INSTRUCTION,
+    ThreadFetchError,
+    compose_system_prompt,
+    fetch_cross_channel_rag as _fetch_cross_channel_rag,
+    get_checkpoint_seconds,
+    get_cross_channel_ids,
+    load_examples as _load_examples,
+    prepare_draft,
+    select_skills as _select_skills,
+)
 from common.slack.slack_api import slack_api
 from common.slack.slack_bot import slack_listener, slack_listener_with_threads
 from common.slack.slack_rag import slack_rag
+from common.tools.prompt_scheduler import reload_jobs_from_disk, shutdown_scheduler, start_scheduler
 from config.config import settings, parse_duration_seconds
-
-DEFAULT_INSTRUCTION = "Draft a reply to this thread."
-PROMPT_TEMPLATE = (Path(__file__).parent / "draft_prompt.md").read_text()
-EXAMPLES_PATH = Path(__file__).parent / "example_threads.json"
 
 
 def start():
     app = slack_listener.create_app()
+    slack_listener_with_threads.register_dm_confirmation_handlers(app)
     slack_listener_with_threads.register_copilot_command(app, _handle_copilot)
     slack_listener_with_threads.register_copilot_shortcut(app, _handle_copilot)
     _build_cross_channel_rags()
     _start_periodic_rag_schedules()
+    start_scheduler()
+    reload_jobs_from_disk()
     try:
         slack_listener.start(app)
     finally:
         slack_rag.stop_scheduler()
+        shutdown_scheduler()
 
 
 @log
-def _handle_copilot(channel_id: str, thread_ts: str, user_id: str,
-                    user_text: str, thread_messages: list[dict],
-                    channel_name: str | None = None):
+def _handle_copilot(
+    channel_id: str,
+    thread_ts: str,
+    user_id: str,
+    user_text: str,
+    channel_name: str | None = None,
+):
     try:
         draft = prepare_draft(
-            channel_id, thread_ts, user_id, thread_messages, user_text,
+            channel_id,
+            thread_ts,
+            user_id,
+            user_text,
             channel_name=channel_name,
         )
         slack_api.send_ephemeral(channel_id, thread_ts, user_id, draft)
+    except ThreadFetchError:
+        slack_api.send_ephemeral(
+            channel_id,
+            thread_ts,
+            user_id,
+            "Add me to this channel first. /invite @CoPilot",
+        )
     except Exception:
         slack_api.send_ephemeral(
             channel_id, thread_ts, user_id, "Failed to generate draft, try again."
         )
 
 
-def prepare_draft(channel_id: str, thread_ts: str, user_id: str,
-                  thread_messages: list[dict], user_text: str,
-                  channel_name: str | None = None) -> str:
-    skills = _select_skills(thread_messages, user_text)
-    thread_context = " ".join(m.get("text", "") for m in thread_messages[-5:])
-    rag_results = _fetch_rag_context(channel_id, thread_ts, user_id, thread_messages)
-    cross_rag_results = _fetch_cross_channel_rag(channel_id, thread_ts, user_id, thread_context)
-    examples = _load_examples()
-    prompt = compose_system_prompt(
-        thread_messages,
-        user_text,
-        skills,
-        rag_results,
-        cross_rag_results,
-        examples,
-        channel_id=channel_id,
-        thread_ts=thread_ts,
-        channel_name=channel_name,
-    )
-    return llm_client.generate(prompt)
-
-
-def compose_system_prompt(thread_messages: list[dict], user_text: str,
-                          skills: list[str] | None = None,
-                          rag_results: list[dict] | None = None,
-                          cross_rag_results: list[dict] | None = None,
-                          examples: list[dict] | None = None,
-                          channel_id: str | None = None,
-                          thread_ts: str | None = None,
-                          channel_name: str | None = None) -> str:
-    channel_display = None
-    if channel_name and channel_name.strip():
-        cn = channel_name.strip()
-        channel_display = cn if cn.startswith("#") else f"#{cn}"
-    channel_ctx = ""
-    if rag_results:
-        if channel_id and thread_ts:
-            channel_ctx = slack_rag.format_rag_context_block(
-                channel_id,
-                thread_ts,
-                rag_results,
-                channel_display_name=channel_display,
-            )
-        else:
-            channel_ctx = "\n".join(f"- {r.get('text', '')}" for r in rag_results)
-    cross_ctx = ""
-    if cross_rag_results:
-        cross_ctx = slack_rag.format_cross_channel_rag_text(cross_rag_results)
-    rendered = PROMPT_TEMPLATE.format(
-        skills=_format_section("Skills", "\n\n".join(skills)) if skills else "",
-        channel_context=_format_section("Relevant Channel Context", channel_ctx) if channel_ctx else "",
-        cross_channel_context=_format_section("Cross-Channel Context", cross_ctx) if cross_ctx else "",
-        examples=_format_section("Example Replies",
-            "\n".join(f"Q: {e['question']}\nA: {e['answer']}" for e in examples)) if examples else "",
-        thread=_format_thread(thread_messages),
-        instruction=user_text.strip() if user_text.strip() else DEFAULT_INSTRUCTION,
-    )
-    return _collapse_blank_lines(rendered)
-
-
-def _select_skills(thread_messages: list[dict], user_text: str) -> list[str]:
-    skills = progressive_disclosure.select_skills("reply", thread_messages, user_text)
-    if not skills:
-        return [progressive_disclosure.get_default_instruction()]
-    return skills
-
-
-def _fetch_rag_context(channel_id: str, thread_ts: str, user_id: str,
-                       thread_messages: list[dict]) -> list[dict]:
-    try:
-        if not slack_rag.is_ready(channel_id):
-            slack_api.send_ephemeral(
-                channel_id, thread_ts, user_id,
-                "Preparing RAG for this channel, will update when done."
-            )
-            slack_rag.build(channel_id, _get_checkpoint_seconds())
-
-        thread_context = " ".join(m.get("text", "") for m in thread_messages[-5:])
-        return slack_rag.query_channel(channel_id, thread_context)
-    except Exception:
-        return []
-
-
-def _fetch_cross_channel_rag(channel_id: str, thread_ts: str, user_id: str,
-                             thread_context: str) -> list[dict]:
-    cross_channels = _get_cross_channel_ids()
-    if not cross_channels:
-        return []
-
-    try:
-        missing = slack_rag.missing_channels(cross_channels)
-        if missing:
-            names = ", ".join(missing)
-            slack_api.send_ephemeral(
-                channel_id, thread_ts, user_id,
-                f"Creating RAG for {names}, please wait."
-            )
-            checkpoint = _get_checkpoint_seconds()
-            for ch in missing:
-                slack_rag.build(ch, checkpoint)
-
-        return slack_rag.query_cross_channel(
-            cross_channels, thread_context, exclude_channel=channel_id
-        )
-    except Exception:
-        return []
-
-
 def _build_cross_channel_rags():
-    cross_channels = _get_cross_channel_ids()
+    cross_channels = get_cross_channel_ids()
     if cross_channels:
-        slack_rag.build_all_missing(cross_channels, _get_checkpoint_seconds())
+        slack_rag.build_all_missing(cross_channels, get_checkpoint_seconds())
 
 
 def _start_periodic_rag_schedules():
-    checkpoint = _get_checkpoint_seconds()
+    checkpoint = get_checkpoint_seconds()
     for entry in settings.rag.slack:
         channel = entry.get("channel", "")
         update = entry.get("update", "")
@@ -175,36 +87,6 @@ def _parse_update_interval(update_str: str) -> float | None:
     if len(parts) == 2 and parts[0] == "every":
         return parse_duration_seconds(parts[1])
     return None
-
-
-def _get_cross_channel_ids() -> list[str]:
-    return list(settings.rag.cross_channel)
-
-
-def _get_checkpoint_seconds() -> float:
-    duration = settings.rag.checkpoint_duration
-    return parse_duration_seconds(duration)
-
-
-def _load_examples() -> list[dict]:
-    if not EXAMPLES_PATH.exists():
-        return []
-    return json.loads(EXAMPLES_PATH.read_text())
-
-
-def _format_section(title: str, body: str) -> str:
-    return f"## {title}\n{body}"
-
-
-def _collapse_blank_lines(text: str) -> str:
-    return re.sub(r"\n{3,}", "\n\n", text).strip()
-
-
-def _format_thread(messages: list[dict]) -> str:
-    return "\n".join(
-        f"<@{m.get('user', 'unknown')}>: {m.get('text', '')}"
-        for m in messages
-    )
 
 
 if __name__ == "__main__":

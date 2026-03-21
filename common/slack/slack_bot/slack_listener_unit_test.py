@@ -42,7 +42,6 @@ class TestRegisterCopilotCommand:
     def test_handler_called_with_thread_data(self, mock_slack_api):
         app = MagicMock()
         handler = MagicMock()
-        mock_slack_api.read_thread.return_value = [{"user": "U1", "text": "hello"}]
 
         register_copilot_command(app, handler)
         registered_fn = _get_registered_handler(app)
@@ -53,8 +52,7 @@ class TestRegisterCopilotCommand:
 
         handler.assert_called_once_with(
             channel_id="C1", thread_ts="T1", user_id="U1",
-            user_text="help me", thread_messages=[{"user": "U1", "text": "hello"}],
-            channel_name=None,
+            user_text="help me", channel_name=None,
         )
 
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
@@ -71,23 +69,6 @@ class TestRegisterCopilotCommand:
         mock_slack_api.send_ephemeral.assert_called_once()
         assert "thread" in mock_slack_api.send_ephemeral.call_args[0][3].lower()
 
-    @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
-    def test_read_thread_error_sends_channel_error(self, mock_slack_api):
-        app = MagicMock()
-        handler = MagicMock()
-        mock_slack_api.read_thread.side_effect = Exception("not_in_channel")
-
-        register_copilot_command(app, handler)
-        registered_fn = _get_registered_handler(app)
-
-        registered_fn(ack=MagicMock(), command={
-            "channel_id": "C1", "user_id": "U1", "text": "", "thread_ts": "T1"
-        })
-
-        handler.assert_not_called()
-        assert "channel" in mock_slack_api.send_ephemeral.call_args[0][3].lower()
-
-
 class TestRegisterCopilotShortcut:
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
     def test_registers_message_shortcut(self, mock_slack_api):
@@ -99,7 +80,6 @@ class TestRegisterCopilotShortcut:
     def test_shortcut_handler_called_with_thread_data(self, mock_slack_api):
         app = MagicMock()
         handler = MagicMock()
-        mock_slack_api.read_thread.return_value = [{"user": "U1", "text": "hello"}]
 
         register_copilot_shortcut(app, handler)
         registered_fn = _get_registered_shortcut_handler(app)
@@ -113,15 +93,13 @@ class TestRegisterCopilotShortcut:
 
         handler.assert_called_once_with(
             channel_id="C1", thread_ts="1516229200.000000", user_id="U1",
-            user_text="", thread_messages=[{"user": "U1", "text": "hello"}],
-            channel_name="team-chat",
+            user_text="", channel_name="team-chat",
         )
 
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
     def test_shortcut_in_channel_message_uses_message_ts_as_thread(self, mock_slack_api):
         app = MagicMock()
         handler = MagicMock()
-        mock_slack_api.read_thread.return_value = [{"user": "U2", "text": "root msg"}]
 
         register_copilot_shortcut(app, handler)
         registered_fn = _get_registered_shortcut_handler(app)
@@ -133,9 +111,7 @@ class TestRegisterCopilotShortcut:
         }
         registered_fn(ack=MagicMock(), shortcut=shortcut, client=MagicMock())
 
-        mock_slack_api.read_thread.assert_called_once_with("C2", "1516229207.000133")
         handler.assert_called_once_with(
             channel_id="C2", thread_ts="1516229207.000133", user_id="U1",
-            user_text="", thread_messages=[{"user": "U2", "text": "root msg"}],
-            channel_name=None,
+            user_text="", channel_name=None,
         )

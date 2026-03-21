@@ -1,4 +1,5 @@
 import json
+import re
 import ssl
 import urllib.request
 
@@ -75,10 +76,66 @@ def get_user_display_name(user_id: str) -> str:
 
 
 @log
-def send_ephemeral(channel_id: str, thread_ts: str, user_id: str, text: str):
-    get_client().chat_postEphemeral(
-        channel=channel_id, thread_ts=thread_ts, user=user_id, text=text
-    )
+def send_ephemeral(channel_id: str, thread_ts: str | None, user_id: str, text: str):
+    kwargs: dict = {"channel": channel_id, "user": user_id, "text": text}
+    if thread_ts:
+        kwargs["thread_ts"] = thread_ts
+    get_client().chat_postEphemeral(**kwargs)
+
+
+@log
+def send_ephemeral_blocks(
+    channel_id: str,
+    thread_ts: str | None,
+    user_id: str,
+    text: str,
+    blocks: list[dict],
+):
+    kwargs: dict = {
+        "channel": channel_id,
+        "user": user_id,
+        "text": text,
+        "blocks": blocks,
+    }
+    if thread_ts:
+        kwargs["thread_ts"] = thread_ts
+    get_client().chat_postEphemeral(**kwargs)
+
+
+@log
+def send_dm(user_id: str, text: str):
+    client = get_client()
+    conv = client.conversations_open(users=user_id)
+    ch = conv["channel"]["id"]
+    client.chat_postMessage(channel=ch, text=text)
+
+
+def resolve_user(query: str) -> str | None:
+    """Resolve display name, username, or raw user id to a Slack user id."""
+    q = (query or "").strip()
+    if not q:
+        return None
+    if re.fullmatch(r"[UW][A-Z0-9]+", q):
+        return q
+    q_lower = q.lower()
+    client = get_client()
+    cursor = None
+    while True:
+        result = client.users_list(cursor=cursor, limit=200)
+        for member in result.get("members", []):
+            if member.get("deleted") or member.get("is_bot"):
+                continue
+            uid = member.get("id", "")
+            profile = member.get("profile") or {}
+            display = (profile.get("display_name") or "").strip().lower()
+            real = (member.get("real_name") or "").strip().lower()
+            name = (member.get("name") or "").strip().lower()
+            if q_lower in (display, real, name) or q_lower == uid.lower():
+                return uid
+        cursor = result.get("response_metadata", {}).get("next_cursor")
+        if not cursor:
+            break
+    return None
 
 
 @log

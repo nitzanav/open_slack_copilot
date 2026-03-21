@@ -308,11 +308,11 @@ class TestFormatRagText:
             "Channel name: #all-elias\n"
             "Thread id: C0ALHSXRDU5\n"
             "Users:\n"
-            "  U0ALHV1GDDK: Info\n"
-            "  U0AMFJ2AVME: Hola\n"
+            "  <@U0ALHV1GDDK>: Info\n"
+            "  <@U0AMFJ2AVME>: Hola\n"
             "\n"
-            "U0ALHV1GDDK [1773505612]: The make run does not work\n"
-            "U0AMFJ2AVME [1773505723]: now make test does not work. what to do now?"
+            "[2026-03-14 16:26] <@U0ALHV1GDDK>: The make run does not work\n"
+            "[2026-03-14 16:28] <@U0AMFJ2AVME>: now make test does not work. what to do now?"
         )
 
     @patch("common.slack.slack_rag.slack_rag.slack_api")
@@ -325,8 +325,8 @@ class TestFormatRagText:
         ]
         text = slack_rag.format_cross_channel_rag_text(results)
         assert text.index("Channel id: C1") < text.index("Channel id: C2")
-        assert "U1 [1]: first" in text
-        assert "U2 [2]: second" in text
+        assert "[1970-01-01 00:00] <@U1>: first" in text
+        assert "[1970-01-01 00:00] <@U2>: second" in text
 
 
 class TestScheduler:

@@ -7,3 +7,4 @@ fastembed>=0.7.0
 dynaconf>=3.2.0
 pytest>=8.0.0
 pytest-asyncio>=0.23.0
+apscheduler>=3.10.0

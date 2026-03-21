@@ -3,6 +3,7 @@ import threading
 
 from common.rag import rag
 from common.slack.slack_api import slack_api
+from common.slack.thread_format import format_rag_hits_for_prompt
 
 _last_indexed_ts: dict[str, str] = {}
 _scheduler_threads: list[threading.Thread] = []
@@ -251,20 +252,6 @@ def _collection_name(channel_id: str) -> str:
     return f"slack_channel_{channel_id}"
 
 
-def _ts_display(ts: str) -> str:
-    if not ts:
-        return "-"
-    try:
-        return str(int(float(ts)))
-    except (ValueError, TypeError):
-        part = str(ts).split(".")[0]
-        return part if part else "-"
-
-
-def _message_body(r: dict) -> str:
-    return (r.get("text") or "").strip()
-
-
 def format_rag_context_block(
     channel_id: str,
     thread_ts: str,
@@ -275,38 +262,12 @@ def format_rag_context_block(
     """Format same-channel RAG hits as plain text for LLM context."""
     if not results:
         return ""
-    name = channel_display_name if channel_display_name is not None else (
-        slack_api.get_channel_prefixed_name(channel_id)
+    return format_rag_hits_for_prompt(
+        channel_id,
+        thread_ts,
+        results,
+        channel_display_name=channel_display_name,
     )
-    user_meta: dict[str, str] = {}
-    order: list[str] = []
-    for r in results:
-        uid = (r.get("from") or "").strip()
-        if not uid:
-            continue
-        if uid not in user_meta:
-            order.append(uid)
-            label = (r.get("from_name") or "").strip()
-            if not label:
-                label = slack_api.get_user_display_name(uid)
-            user_meta[uid] = label
-
-    lines = [
-        f"Channel id: {channel_id}",
-        f"Channel name: {name}",
-        f"Thread id: {thread_ts}",
-        "Users:",
-    ]
-    for uid in order:
-        lines.append(f"  {uid}: {user_meta[uid]}")
-    lines.append("")
-
-    for r in results:
-        uid = (r.get("from") or "unknown").strip() or "unknown"
-        ts = _ts_display(str(r.get("ts") or ""))
-        body = _message_body(r)
-        lines.append(f"{uid} [{ts}]: {body}")
-    return "\n".join(lines)
 
 
 def format_cross_channel_rag_text(results: list[dict]) -> str:
