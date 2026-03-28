@@ -58,6 +58,7 @@
   - [M1.4: Cross-channel RAG](milestones/m1_slash_command/m1_4_cross_channel_rag.md) — add to the system prompt 10 relevant from popular/related channels
     - If RAG missing → initiate, send ephemeral "Creating RAG for #X, #Y, #Z", wait for it
     - On installation, build RAG of popular threads
+- **App @mention (implemented)** — `@CoPilot` in a channel runs the same draft + ephemeral flow as the message shortcut (optional text after the mention like `/copilot`). Context: recent channel messages on a root post, or the thread when the mention is in a thread. Registered in `slack_listener_with_threads.py` with `app_mention`; see README.
 - [**M2: Auto-draft replies to mentions**](milestones/m2_auto_draft_mentions/m2_auto_draft_mentions.md) — listen via `slack_listener_with_threads.py`, filter for messages where the user is @mentioned, use reply skills (progressive disclosure) to draft a reply, always drafts (falls back to default reply skill). Send ephemeral with suggested draft.
   - reuses M1 flow with reply skills
   - use case — user wants to draft answers for all their mentions
