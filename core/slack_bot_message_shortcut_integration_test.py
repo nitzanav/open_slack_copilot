@@ -74,7 +74,7 @@ class TestMessageShortcutEndToEnd:
 
         shortcut = _shortcut_payload(channel_id="C1", user_id="U1")
 
-        with patch("core.slack_bot.slack_api") as mock_core_slack:
+        with patch("core.slack_bot.send_draft_ephemeral_with_revise") as mock_rev:
             registered_fn(ack=MagicMock(), shortcut=shortcut, client=MagicMock())
 
             mock_fetch.assert_called_once_with("C1", "1516229200.000000")
@@ -83,8 +83,13 @@ class TestMessageShortcutEndToEnd:
             for msg in THREAD_3:
                 assert msg["text"] in prompt
 
-            mock_core_slack.send_ephemeral.assert_called_once_with(
-                "C1", "1516229200.000000", "U1", "Generated draft from shortcut"
+            mock_rev.assert_called_once_with(
+                "C1",
+                "1516229200.000000",
+                "U1",
+                "U1",
+                "Generated draft from shortcut",
+                context_kind="thread",
             )
 
     @patch("common.slack.copilot_pipeline.fetch_channel_tail_messages")
@@ -108,12 +113,17 @@ class TestMessageShortcutEndToEnd:
 
         shortcut = _shortcut_payload(thread_ts=None)
 
-        with patch("core.slack_bot.slack_api") as mock_core_slack:
+        with patch("core.slack_bot.send_draft_ephemeral_with_revise") as mock_rev:
             registered_fn(ack=MagicMock(), shortcut=shortcut, client=MagicMock())
 
             mock_tail.assert_called_once_with("C1")
-            mock_core_slack.send_ephemeral.assert_called_once_with(
-                "C1", "1516229207.000133", "U1", "Draft for channel message"
+            mock_rev.assert_called_once_with(
+                "C1",
+                "1516229207.000133",
+                "U1",
+                "U1",
+                "Draft for channel message",
+                context_kind="channel_tail",
             )
 
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")

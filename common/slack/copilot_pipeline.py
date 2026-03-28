@@ -23,6 +23,17 @@ EXAMPLES_PATH = _SLACK_DIR / "example_threads.json"
 _INTERACTIVE_TOOLS = [SCHEDULE_PROMPT_TOOL, SEND_SLACK_PM_TOOL]
 
 
+def _resolve_tools(
+    tools: list[dict] | None,
+    excluded_tools: list[dict] | None,
+) -> list[dict]:
+    if tools is not None:
+        return tools
+    if excluded_tools:
+        return [t for t in _INTERACTIVE_TOOLS if not any(t is ex for ex in excluded_tools)]
+    return _INTERACTIVE_TOOLS
+
+
 class ThreadFetchError(Exception):
     """Raised when the Slack thread cannot be loaded (e.g. bot not in channel)."""
 
@@ -72,6 +83,7 @@ def prepare_draft(
     user_text: str,
     channel_name: str | None = None,
     tools: list[dict] | None = None,
+    excluded_tools: list[dict] | None = None,
     tool_dispatch: Callable[[str, str], str] | None = None,
     thread_messages: list[dict] | None = None,
 ) -> str:
@@ -95,7 +107,7 @@ def prepare_draft(
         thread_ts=thread_ts,
         channel_name=channel_name,
     )
-    effective_tools = tools if tools is not None else _INTERACTIVE_TOOLS
+    effective_tools = _resolve_tools(tools, excluded_tools)
     effective_dispatch = tool_dispatch or dispatch_copilot_tool
     with draft_invocation_context(channel_id, thread_ts, user_id):
         return llm_client.agent_tool_loop(

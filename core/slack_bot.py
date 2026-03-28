@@ -12,6 +12,7 @@ from common.slack.copilot_pipeline import (
 )
 from common.slack.slack_api import slack_api
 from common.slack.slack_bot import slack_listener, slack_listener_with_threads
+from common.slack.slack_bot.draft_revise_actions import send_draft_ephemeral_with_revise
 from common.slack.slack_rag import slack_rag
 from common.tools.prompt_scheduler import reload_jobs_from_disk, shutdown_scheduler, start_scheduler
 from config.config import settings, parse_duration_seconds
@@ -27,6 +28,7 @@ def _get_bot_user_id() -> str | None:
 def start():
     app = slack_listener.create_app()
     slack_listener_with_threads.register_dm_confirmation_handlers(app)
+    slack_listener_with_threads.register_draft_revise_handlers(app)
     slack_listener_with_threads.register_copilot_command(app, _handle_copilot)
     slack_listener_with_threads.register_copilot_shortcut(app, _handle_copilot)
     slack_listener_with_threads.register_copilot_app_mention(
@@ -51,6 +53,7 @@ def _handle_copilot(
     user_text: str,
     channel_name: str | None = None,
     thread_messages: list[dict] | None = None,
+    context_kind: str = "thread",
 ):
     try:
         draft = prepare_draft(
@@ -61,7 +64,14 @@ def _handle_copilot(
             channel_name=channel_name,
             thread_messages=thread_messages,
         )
-        slack_api.send_ephemeral(channel_id, thread_ts, user_id, draft)
+        send_draft_ephemeral_with_revise(
+            channel_id,
+            thread_ts,
+            user_id,
+            user_id,
+            draft,
+            context_kind=context_kind,
+        )
     except ThreadFetchError:
         slack_api.send_ephemeral(
             channel_id,

@@ -5,9 +5,10 @@ from slack_bolt import App
 from common.log import log
 from common.slack.copilot_pipeline import ThreadFetchError, resolve_copilot_slack_context
 from common.slack.slack_api import slack_api
-from common.slack.slack_bot import dm_confirmation
+from common.slack.slack_bot import dm_confirmation, draft_revise_actions
 
 register_dm_confirmation_handlers = dm_confirmation.register_dm_confirmation_handlers
+register_draft_revise_handlers = draft_revise_actions.register_draft_revise_handlers
 
 _MENTION_TOKEN_RE = re.compile(r"<@[^>]+>\s*")
 
@@ -36,6 +37,7 @@ def register_copilot_command(app: App, handler):
             user_id=user_id,
             user_text=user_text,
             channel_name=command.get("channel_name"),
+            context_kind="thread",
         )
 
 
@@ -57,6 +59,7 @@ def register_copilot_shortcut(app: App, handler):
             _send_channel_error(channel_id, anchor_fallback, user_id, response_url)
             return
 
+        context_kind = "channel_tail" if not message.get("thread_ts") else "thread"
         handler(
             channel_id=channel_id,
             thread_ts=anchor_ts,
@@ -64,6 +67,7 @@ def register_copilot_shortcut(app: App, handler):
             user_text="",
             thread_messages=thread_messages,
             channel_name=shortcut["channel"].get("name"),
+            context_kind=context_kind,
         )
 
 
@@ -95,6 +99,7 @@ def register_copilot_app_mention(app: App, handler, bot_user_id: str | None = No
             )
             return
 
+        context_kind = "channel_tail" if not event.get("thread_ts") else "thread"
         handler(
             channel_id=channel_id,
             thread_ts=anchor_ts,
@@ -102,6 +107,7 @@ def register_copilot_app_mention(app: App, handler, bot_user_id: str | None = No
             user_text=user_text,
             thread_messages=thread_messages,
             channel_name=None,
+            context_kind=context_kind,
         )
 
 

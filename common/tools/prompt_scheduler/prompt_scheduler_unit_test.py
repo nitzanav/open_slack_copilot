@@ -50,8 +50,9 @@ def test_run_calls_prepare_draft_with_prompt(mock_slack, mock_draft, tmp_path, m
     call_kw = mock_draft.call_args
     assert call_kw[0] == ("C1", "T1", "U1")
     assert call_kw[1]["user_text"] == prompt_text
-    from common.tools.send_slack_pm import SEND_SLACK_PM_TOOL
-    assert call_kw[1]["tools"] == [SEND_SLACK_PM_TOOL]
+    from common.tools.schedule_tool import SCHEDULE_PROMPT_TOOL
+
+    assert call_kw[1]["excluded_tools"] == [SCHEDULE_PROMPT_TOOL]
 
 
 @patch("common.tools.prompt_scheduler.prompt_scheduler.remove_job")
@@ -83,8 +84,8 @@ def test_thread_inaccessible_removes_job(mock_slack, mock_remove, mock_draft, tm
 
 
 @patch("common.tools.prompt_scheduler.prompt_scheduler.prepare_draft")
-@patch("common.tools.prompt_scheduler.prompt_scheduler.slack_api")
-def test_result_sent_to_owner(mock_slack, mock_draft, tmp_path, monkeypatch):
+@patch("common.tools.prompt_scheduler.prompt_scheduler.send_draft_ephemeral_with_revise")
+def test_result_sent_to_owner(mock_send_rev, mock_draft, tmp_path, monkeypatch):
     monkeypatch.setattr(sched, "scheduled_prompts_root", lambda: tmp_path)
     _write_job(tmp_path, "sched_owner", _future_meta())
     mock_draft.return_value = "Here is the draft"
@@ -92,7 +93,14 @@ def test_result_sent_to_owner(mock_slack, mock_draft, tmp_path, monkeypatch):
 
     sched.run_scheduled_prompt("sched_owner")
 
-    mock_slack.send_ephemeral.assert_called_once_with("C1", "T1", "UOWNER", "Here is the draft")
+    mock_send_rev.assert_called_once_with(
+        "C1",
+        "T1",
+        "UOWNER",
+        "U1",
+        "Here is the draft",
+        context_kind="thread",
+    )
 
 
 @patch("common.tools.prompt_scheduler.prompt_scheduler.BackgroundScheduler")

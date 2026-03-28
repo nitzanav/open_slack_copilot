@@ -189,9 +189,10 @@ class TestHandleCopilot:
     @patch("common.slack.copilot_pipeline.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
+    @patch("core.slack_bot.send_draft_ephemeral_with_revise")
     @patch("core.slack_bot.slack_api")
     @patch("common.slack.copilot_pipeline.llm_client")
-    def test_draft_sent_as_ephemeral(self, mock_llm, mock_slack, mock_pd, mock_rag, mock_fetch):
+    def test_draft_sent_as_ephemeral(self, mock_llm, mock_slack, mock_send_rev, mock_pd, mock_rag, mock_fetch):
         mock_pd.select_skills.return_value = []
         mock_pd.get_default_instruction.return_value = "default"
         mock_rag.is_ready.return_value = True
@@ -202,7 +203,14 @@ class TestHandleCopilot:
         mock_fetch.return_value = THREAD_3
 
         _handle_copilot("C123", "T123", "U001", "help")
-        mock_slack.send_ephemeral.assert_called_with("C123", "T123", "U001", "Here is my draft")
+        mock_send_rev.assert_called_once_with(
+            "C123",
+            "T123",
+            "U001",
+            "U001",
+            "Here is my draft",
+            context_kind="thread",
+        )
 
     @patch("common.slack.copilot_pipeline.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")

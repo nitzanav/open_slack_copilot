@@ -11,8 +11,8 @@ from apscheduler.triggers.cron import CronTrigger
 from common.log import log
 from common.slack.copilot_pipeline import ThreadFetchError, prepare_draft
 from common.slack.slack_api import slack_api
-from common.tools.schedule_tool import scheduled_prompts_root
-from common.tools.send_slack_pm import SEND_SLACK_PM_TOOL
+from common.slack.slack_bot.draft_revise_actions import send_draft_ephemeral_with_revise
+from common.tools.schedule_tool import SCHEDULE_PROMPT_TOOL, scheduled_prompts_root
 from config.config import settings
 
 _logger = logging.getLogger("open_slack_copilot")
@@ -125,7 +125,7 @@ def run_scheduled_prompt(job_id: str):
             thread_ts,
             user_id,
             user_text=prompt_text,
-            tools=[SEND_SLACK_PM_TOOL],
+            excluded_tools=[SCHEDULE_PROMPT_TOOL],
         )
     except ThreadFetchError:
         remove_job(job_id, delete_files=True)
@@ -144,4 +144,11 @@ def run_scheduled_prompt(job_id: str):
 
     owner = _owner_id()
     if owner and result:
-        slack_api.send_ephemeral(channel_id, thread_ts, owner, result)
+        send_draft_ephemeral_with_revise(
+            channel_id,
+            thread_ts,
+            owner,
+            user_id,
+            result,
+            context_kind="thread",
+        )

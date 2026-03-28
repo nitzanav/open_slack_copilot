@@ -49,7 +49,7 @@ class TestSlashCommandEndToEnd:
 
         command = {"channel_id": "C1", "user_id": "U1", "text": "reply politely", "thread_ts": "T1"}
 
-        with patch("core.slack_bot.slack_api") as mock_core_slack:
+        with patch("core.slack_bot.send_draft_ephemeral_with_revise") as mock_rev:
             registered_fn(ack=MagicMock(), command=command)
 
             mock_llm.agent_tool_loop.assert_called_once()
@@ -58,8 +58,13 @@ class TestSlashCommandEndToEnd:
             for msg in THREAD_3:
                 assert msg["text"] in prompt
 
-            mock_core_slack.send_ephemeral.assert_called_once_with(
-                "C1", "T1", "U1", "Generated draft reply"
+            mock_rev.assert_called_once_with(
+                "C1",
+                "T1",
+                "U1",
+                "U1",
+                "Generated draft reply",
+                context_kind="thread",
             )
 
     @patch("common.slack.copilot_pipeline.fetch_thread_messages")
@@ -81,9 +86,16 @@ class TestSlashCommandEndToEnd:
 
         command = {"channel_id": "C2", "user_id": "U2", "text": "", "thread_ts": "T2"}
 
-        with patch("core.slack_bot.slack_api") as mock_core_slack:
+        with patch("core.slack_bot.send_draft_ephemeral_with_revise") as mock_rev:
             registered_fn(ack=MagicMock(), command=command)
-            mock_core_slack.send_ephemeral.assert_called_once_with("C2", "T2", "U2", "Singleton draft")
+            mock_rev.assert_called_once_with(
+                "C2",
+                "T2",
+                "U2",
+                "U2",
+                "Singleton draft",
+                context_kind="thread",
+            )
 
     def test_thread_enrichment_passes_correct_ts(self):
         from common.slack.slack_bot.slack_listener_with_threads import register_copilot_command
@@ -102,6 +114,7 @@ class TestSlashCommandEndToEnd:
             user_id="U1",
             user_text="",
             channel_name=None,
+            context_kind="thread",
         )
 
     def test_callback_registration(self):

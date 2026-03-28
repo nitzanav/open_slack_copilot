@@ -22,7 +22,7 @@ Go to a message you were mentioned in (or any message you want to draft a reply 
 2. Click the **&#x22EE;** (three-dot menu) on the right side of the message.
 3. **Connect to apps** → **Draft with CoPilot**.
 4. Expect an ephemeral message from the bot with the suggested reply.
-5. Click **Send** or **Revise**.
+5. Click **Revise** to open a modal, edit the instruction (the default includes the current draft), and submit to regenerate the reply. Posting the draft to the channel as you is not implemented yet.
 
 ### Mention @CoPilot
 
@@ -30,7 +30,7 @@ In a channel where the app is invited, you can **@mention** the bot (for example
 
 1. Type your mention in the message (optionally add instructions after it, same idea as text after `/copilot`).
 2. Send the message.
-3. You get an **ephemeral** draft in the thread under that message, like the shortcut flow.
+3. You get an **ephemeral** draft in the thread under that message, like the shortcut flow (use **Revise** on that ephemeral as above).
 
 **Context**: On a **channel root** message (not in a thread), the draft uses the most recent messages in the channel (see `copilot_channel_context_limit` in [`config/default.yaml`](config/default.yaml)). **Inside a thread**, the draft uses that thread’s messages.
 

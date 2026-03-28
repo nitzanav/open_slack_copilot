@@ -57,7 +57,7 @@ class TestRegisterCopilotCommand:
 
         handler.assert_called_once_with(
             channel_id="C1", thread_ts="T1", user_id="U1",
-            user_text="help me", channel_name=None,
+            user_text="help me", channel_name=None, context_kind="thread",
         )
 
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
@@ -103,6 +103,7 @@ class TestRegisterCopilotShortcut:
         handler.assert_called_once_with(
             channel_id="C1", thread_ts="1516229200.000000", user_id="U1",
             user_text="", thread_messages=msgs, channel_name="team-chat",
+            context_kind="thread",
         )
 
     @patch("common.slack.slack_bot.slack_listener_with_threads.resolve_copilot_slack_context")
@@ -127,6 +128,7 @@ class TestRegisterCopilotShortcut:
         handler.assert_called_once_with(
             channel_id="C2", thread_ts="1516229207.000133", user_id="U1",
             user_text="", thread_messages=msgs, channel_name=None,
+            context_kind="channel_tail",
         )
 
 
@@ -165,6 +167,7 @@ class TestRegisterCopilotAppMention:
             user_text="make it brief",
             thread_messages=msgs,
             channel_name=None,
+            context_kind="channel_tail",
         )
 
     @patch("common.slack.slack_bot.slack_listener_with_threads.resolve_copilot_slack_context")
@@ -190,6 +193,15 @@ class TestRegisterCopilotAppMention:
 
         mock_resolve.assert_called_once_with(
             "C9", {"ts": "101.000", "thread_ts": "100.000"},
+        )
+        handler.assert_called_once_with(
+            channel_id="C9",
+            thread_ts="100.000",
+            user_id="UHUMAN",
+            user_text="",
+            thread_messages=msgs,
+            channel_name=None,
+            context_kind="thread",
         )
 
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")

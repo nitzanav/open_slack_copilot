@@ -59,6 +59,7 @@
     - If RAG missing → initiate, send ephemeral "Creating RAG for #X, #Y, #Z", wait for it
     - On installation, build RAG of popular threads
 - **App @mention (implemented)** — `@CoPilot` in a channel runs the same draft + ephemeral flow as the message shortcut (optional text after the mention like `/copilot`). Context: recent channel messages on a root post, or the thread when the mention is in a thread. Registered in `slack_listener_with_threads.py` with `app_mention`; see README.
+- **Draft Revise (implemented)** — Successful drafts are sent as Block Kit ephemerals with a **Revise** button (`common/slack/slack_bot/draft_revise_actions.py`). The user gets a modal with an instruction field (placeholder hint), optional checkbox to include the original draft in the prompt, and submit re-runs `prepare_draft` with default interactive tools and the same Slack context (thread vs channel tail) as the original generation. Applies to `/copilot`, shortcut, @mention, and scheduled prompt results to the config owner. Posting the draft to the channel (as user or bot) is out of scope for this milestone.
 - [**M2: Auto-draft replies to mentions**](milestones/m2_auto_draft_mentions/m2_auto_draft_mentions.md) — listen via `slack_listener_with_threads.py`, filter for messages where the user is @mentioned, use reply skills (progressive disclosure) to draft a reply, always drafts (falls back to default reply skill). Send ephemeral with suggested draft.
   - reuses M1 flow with reply skills
   - use case — user wants to draft answers for all their mentions
