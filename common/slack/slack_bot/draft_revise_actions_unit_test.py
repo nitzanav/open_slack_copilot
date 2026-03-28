@@ -8,6 +8,8 @@ from common.slack.slack_bot.draft_revise_actions import (
     ACTION_INCLUDE_DRAFT,
     ACTION_REVISE_TEXT,
     DraftReviseError,
+    _BUTTON_VALUE_LIMIT,
+    _build_metadata_value,
     _build_private_metadata,
     _build_revise_modal_view,
     _checkbox_is_selected,
@@ -46,6 +48,46 @@ def test_build_blocks_contains_revise_action_with_metadata():
     btn = actions["elements"][0]
     assert btn["action_id"] == "draft_revise"
     assert json.loads(btn["value"])["channel_id"] == "C1"
+
+
+class TestBuildMetadataValue:
+    def test_includes_draft(self):
+        result = _build_metadata_value(
+            channel_id="C1",
+            anchor_ts="T1",
+            prepare_user_id="U1",
+            auth_user_id="U1",
+            context_kind="thread",
+            draft="Hello draft",
+        )
+        parsed = json.loads(result)
+        assert parsed["draft"] == "Hello draft"
+        assert parsed["channel_id"] == "C1"
+
+    def test_truncates_long_draft(self):
+        result = _build_metadata_value(
+            channel_id="C1",
+            anchor_ts="T1",
+            prepare_user_id="U1",
+            auth_user_id="U1",
+            context_kind="thread",
+            draft="x" * 5000,
+        )
+        assert len(result) <= _BUTTON_VALUE_LIMIT
+        parsed = json.loads(result)
+        assert parsed["draft"].endswith("...")
+        assert parsed["channel_id"] == "C1"
+
+    def test_no_draft_omits_key(self):
+        result = _build_metadata_value(
+            channel_id="C1",
+            anchor_ts="T1",
+            prepare_user_id="U1",
+            auth_user_id="U1",
+            context_kind="thread",
+        )
+        parsed = json.loads(result)
+        assert "draft" not in parsed
 
 
 class TestBuildReviseModalView:

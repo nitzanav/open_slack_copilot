@@ -69,6 +69,9 @@ def parse_draft_from_revise_blocks(blocks: list[dict]) -> str:
     return combined
 
 
+_BUTTON_VALUE_LIMIT = 2000
+
+
 def _build_metadata_value(
     *,
     channel_id: str,
@@ -76,6 +79,7 @@ def _build_metadata_value(
     prepare_user_id: str,
     auth_user_id: str,
     context_kind: str,
+    draft: str = "",
 ) -> str:
     payload: dict[str, Any] = {
         "channel_id": channel_id,
@@ -84,6 +88,19 @@ def _build_metadata_value(
         "auth_user_id": auth_user_id,
         "context_kind": context_kind,
     }
+    if draft:
+        payload["draft"] = draft
+    combined = json.dumps(payload, separators=(",", ":"))
+    if len(combined) <= _BUTTON_VALUE_LIMIT:
+        return combined
+    overhead = len(
+        json.dumps({**payload, "draft": ""}, separators=(",", ":"))
+    )
+    max_draft = _BUTTON_VALUE_LIMIT - overhead - 3
+    if max_draft <= 0:
+        payload.pop("draft", None)
+        return json.dumps(payload, separators=(",", ":"))
+    payload["draft"] = draft[:max_draft] + "..."
     return json.dumps(payload, separators=(",", ":"))
 
 
@@ -130,7 +147,7 @@ def build_draft_revise_blocks(draft_text: str, metadata_value: str) -> list[dict
                     "type": "button",
                     "text": {"type": "plain_text", "text": "Revise"},
                     "action_id": ACTION_DRAFT_REVISE,
-                    "value": metadata_value[:2000],
+                    "value": metadata_value[:_BUTTON_VALUE_LIMIT],
                 }
             ],
         }
@@ -154,6 +171,7 @@ def send_draft_ephemeral_with_revise(
         prepare_user_id=prepare_user_id,
         auth_user_id=recipient_user_id,
         context_kind=context_kind,
+        draft=draft_text,
     )
     if len(meta) > 2000:
         slack_api.send_ephemeral(
@@ -293,7 +311,12 @@ def register_draft_revise_handlers(app: App) -> None:
                 _reply_ephemeral_from_action(body, "You can only revise your own draft.")
                 return
             blocks = body.get("message", {}).get("blocks") or []
-            draft = parse_draft_from_revise_blocks(blocks)
+            try:
+                draft = parse_draft_from_revise_blocks(blocks)
+            except DraftReviseError:
+                draft = meta.get("draft") or ""
+            if not draft.strip():
+                raise DraftReviseError("Could not read draft text from this message.")
             view = _build_revise_modal_view(draft, raw_meta)
             client.views_open(trigger_id=body["trigger_id"], view=view)
         except DraftReviseError as e:
