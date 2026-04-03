@@ -14,14 +14,15 @@
 
 - **Draft replies** — via message shortcut, @mention, or `/copilot` slash command
   - Uses RAG of the relevant channel + cross-channel RAG
-  - Using list of predefined "reply skills" selected via progressive disclosure
+  - Using list of predefined **reply** skills selected via progressive disclosure (same pipeline for shortcut, @mention, and slash command)
+  - **Follow-ups on action items** — example **reply** skill [`skill_examples/reply/follow_up/SKILL.md`](../skill_examples/reply/follow_up/SKILL.md) (install under `~/.open_slack_copilot/skills/reply/follow_up/`); uses `schedule_prompt`, `list_usergroup_members`, `send_slack_pm`. Capability map: [M15](milestones/m15_follow_ups_use_case/m15_follow_ups_use_case.md)
 - **Draft Revise** — refine a generated draft with free-text instructions via a modal
 - **Send DM** — LLM can invoke `send_slack_pm` tool; the config owner approves/rejects via ephemeral confirmation
-- **Scheduled prompts** — LLM can invoke `schedule_prompt` tool to register a cron job that re-runs a prompt on a thread (e.g. follow-up reminders); see [M15](milestones/m15_follow_ups_use_case/m15_follow_ups_use_case.md) for gaps vs the full follow-ups story
+- **Scheduled prompts** — LLM can invoke `schedule_prompt` tool to register a cron job that re-runs a prompt on a thread (e.g. follow-up reminders); see [M15](milestones/m15_follow_ups_use_case/m15_follow_ups_use_case.md) for tooling details and remaining gaps (e.g. external status checks)
 
 ### Future / Not Implemented
 
-- [**Follow-ups use case (planned)**](milestones/m15_follow_ups_use_case/m15_follow_ups_use_case.md) — thread-triggered reminders for groups; capability map and code links in milestone doc (user-group expansion, watcher skill in draft flow, and skill/tool alignment still open)
+- [**Follow-ups — remaining gaps**](milestones/m15_follow_ups_use_case/m15_follow_ups_use_case.md) — e.g. Jira / external completion signals; see milestone capability map
 - **Watching Channel supervision** — requests are handled properly? on time?
 - **Create jira ticket** for this action item according to my policy
 - **Remind me** if I didnt reply on time
@@ -40,8 +41,8 @@
 
 - **Saved Skills** — define reusable behaviors in `~/.open_slack_copilot/skills/`
   - Two kinds defined in code (`progressive_disclosure.py`):
-    - **"reply" skills** — selected via progressive disclosure when drafting a reply (implemented)
-    - **"watcher" skills** — intended for channel watching; kind exists but is **not wired** into the pipeline yet
+    - **"reply" skills** — selected via progressive disclosure when drafting a reply (**implemented**); used for `/copilot`, message shortcut, and **`@CoPilot`** app mention. Example: [Follow Up](../skill_examples/reply/follow_up/SKILL.md) (`skills/reply/follow_up/`)
+    - **"watcher" skills** — intended for passive channel watching (M4); kind exists in code but is **not wired** into the pipeline yet — distinct from **reply** skills such as Follow Up
   - Default reply instruction can be overridden via `~/.open_slack_copilot/skills/reply/default.md`
 - **Channel RAG** — build and use retrieval from channel data
   - Build RAG of a specific channel (messages indexed with reaction summaries)
@@ -65,7 +66,7 @@
     - listen `/copilot` via `slack_listener_with_threads.py` (requires use inside a thread)
     - `prepare_draft(...)` in `copilot_pipeline.py`:
       - Compose system prompt (skills, RAG context, cross-channel RAG, example threads, thread messages, instruction)
-      - Run `agent_tool_loop` with `schedule_prompt` and `send_slack_pm` tools
+      - Run `agent_tool_loop` with `schedule_prompt`, `send_slack_pm`, and `list_usergroup_members` tools
       - Send draft as ephemeral with Revise button via `send_draft_ephemeral_with_revise`
   - [M1.2: Reply skills](milestones/m1_slash_command/m1_2_reply_skills.md) — add relevant reply skills (progressive disclosure) to the context
   - [M1.3: Channel RAG](milestones/m1_slash_command/m1_3_channel_rag.md) — add to the system prompt relevant messages from current channel via RAG
@@ -83,7 +84,7 @@
 
 ### Not Implemented
 
-- [**M15: Follow-ups use case**](milestones/m15_follow_ups_use_case/m15_follow_ups_use_case.md) — document and track implementation of the [Follow Up skill example](../skill_examples/watcher/follow_up/SKILL.md): infer cadence, resolve targets, completion checks, `schedule_prompt`, scheduled re-runs, DMs; maps each capability to code or **to be done**
+- [**M15: Follow-ups use case**](milestones/m15_follow_ups_use_case/m15_follow_ups_use_case.md) — document and track implementation of the [Follow Up **reply** skill example](../skill_examples/reply/follow_up/SKILL.md): infer cadence, resolve targets, completion checks, `schedule_prompt`, scheduled re-runs, DMs; maps each capability to code or **to be done**
 - [**M2: Auto-draft replies to mentions**](milestones/m2_auto_draft_mentions/m2_auto_draft_mentions.md) — listen for messages where the user is @mentioned, use reply skills (progressive disclosure) to draft a reply automatically. Send ephemeral with suggested draft. Requires a `message` event listener (not yet wired).
   - reuses M1 flow with reply skills
   - use case — user wants to draft answers for all their mentions

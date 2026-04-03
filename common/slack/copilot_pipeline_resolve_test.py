@@ -5,6 +5,7 @@ from common.slack.copilot_pipeline import (
     resolve_copilot_slack_context,
     ThreadFetchError,
 )
+from common.tools.list_usergroup_members import LIST_USERGROUP_MEMBERS_TOOL
 from common.tools.schedule_tool import SCHEDULE_PROMPT_TOOL
 from common.tools.send_slack_pm import SEND_SLACK_PM_TOOL
 
@@ -65,3 +66,4 @@ class TestPrepareDraftExcludedTools:
         tools_passed = mock_llm.agent_tool_loop.call_args[0][2]
         assert SCHEDULE_PROMPT_TOOL not in tools_passed
         assert SEND_SLACK_PM_TOOL in tools_passed
+        assert LIST_USERGROUP_MEMBERS_TOOL in tools_passed

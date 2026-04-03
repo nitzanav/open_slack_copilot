@@ -11,6 +11,10 @@ from common.slack.slack_api import slack_api
 from common.slack.slack_rag import slack_rag
 from common.slack.thread_format import format_slack_thread_for_prompt
 from common.tools.draft_context import draft_invocation_context
+from common.tools.list_usergroup_members import (
+    LIST_USERGROUP_MEMBERS_TOOL,
+    handle_list_usergroup_members_call,
+)
 from common.tools.schedule_tool import SCHEDULE_PROMPT_TOOL, handle_schedule_prompt_call
 from common.tools.send_slack_pm import SEND_SLACK_PM_TOOL, handle_send_slack_pm_call
 from config.config import settings, parse_duration_seconds
@@ -20,7 +24,11 @@ _SLACK_DIR = Path(__file__).resolve().parent
 PROMPT_TEMPLATE = (_SLACK_DIR / "draft_prompt.md").read_text()
 EXAMPLES_PATH = _SLACK_DIR / "example_threads.json"
 
-_INTERACTIVE_TOOLS = [SCHEDULE_PROMPT_TOOL, SEND_SLACK_PM_TOOL]
+_INTERACTIVE_TOOLS = [
+    SCHEDULE_PROMPT_TOOL,
+    SEND_SLACK_PM_TOOL,
+    LIST_USERGROUP_MEMBERS_TOOL,
+]
 
 
 def _resolve_tools(
@@ -123,6 +131,8 @@ def dispatch_copilot_tool(name: str, arguments_json: str) -> str:
         return handle_schedule_prompt_call(arguments_json)
     if name == "send_slack_pm":
         return handle_send_slack_pm_call(arguments_json)
+    if name == "list_usergroup_members":
+        return handle_list_usergroup_members_call(arguments_json)
     return '{"error": "unknown tool"}'
 
 

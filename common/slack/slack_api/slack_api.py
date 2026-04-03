@@ -138,6 +138,69 @@ def resolve_user(query: str) -> str | None:
     return None
 
 
+_SUBTEAM_MENTION_RE = re.compile(r"<!subteam\^([A-Z0-9]+)(?:\|[^>]*)?>")
+_USERGROUP_ID_RE = re.compile(r"^S[A-Z0-9]+$")
+
+
+def resolve_usergroup_id(query: str) -> str | None:
+    """
+    Resolve a Slack user group (subteam) id from:
+    - Raw id (S…)
+    - Subteam mention text: <!subteam^S0614…> or <!subteam^S0614…|label>
+    - Handle or name (case-insensitive), via usergroups.list
+    """
+    q = (query or "").strip()
+    if not q:
+        return None
+    m = _SUBTEAM_MENTION_RE.search(q)
+    if m:
+        return m.group(1)
+    if _USERGROUP_ID_RE.match(q):
+        return q
+    handle = q.lstrip("@").strip().lower()
+    if not handle:
+        return None
+    client = get_client()
+    cursor: str | None = None
+    while True:
+        kwargs: dict = {"limit": 200}
+        if cursor:
+            kwargs["cursor"] = cursor
+        result = client.usergroups_list(**kwargs)
+        for ug in result.get("usergroups") or []:
+            if not isinstance(ug, dict):
+                continue
+            if ug.get("date_delete"):
+                continue
+            uid = (ug.get("id") or "").strip()
+            h = (ug.get("handle") or "").strip().lower()
+            name = (ug.get("name") or "").strip().lower()
+            if handle == uid.lower() or handle == h or handle == name:
+                return uid
+        cursor = (result.get("response_metadata") or {}).get("next_cursor")
+        if not cursor:
+            break
+    return None
+
+
+@log
+def list_usergroup_members(usergroup_query: str) -> tuple[str, list[str]]:
+    """
+    Resolve usergroup_query to a user group id and return member Slack user ids.
+
+    Raises:
+        ValueError: user group could not be resolved
+        SlackApiError: Slack API failure (e.g. missing usergroups:read scope)
+    """
+    ugid = resolve_usergroup_id(usergroup_query)
+    if not ugid:
+        raise ValueError(f"Could not resolve user group: {usergroup_query!r}")
+    result = get_client().usergroups_users_list(usergroup=ugid)
+    raw = result.get("users") or []
+    user_ids = [str(u).strip() for u in raw if u and str(u).strip()]
+    return ugid, user_ids
+
+
 @log
 def respond_ephemeral(response_url: str, text: str):
     body = json.dumps({"text": text, "response_type": "ephemeral"}).encode()

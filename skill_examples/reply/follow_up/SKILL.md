@@ -1,5 +1,7 @@
 # Follow Up
 
+**Reply skill** — Install under `~/.open_slack_copilot/skills/reply/follow_up/` (copy from the repo’s `skill_examples/reply/follow_up/`). The bot loads **reply** skills via progressive disclosure on every draft: **`@CoPilot`**, the **Draft with CoPilot** message shortcut, and **`/copilot`** in a thread (same `prepare_draft` path). This skill applies when the thread and instruction match (e.g. “please follow up”).
+
 When asked to follow up with users on an action item from a Slack thread.
 
 ## Goal
@@ -32,7 +34,7 @@ Two contexts — follow the matching path.
    expires_in_days: 14
    ```
 
-### B. Scheduled run (skill disclosed inside a scheduled prompt)
+### B. Scheduled run (same reply pipeline; instruction is the saved prompt)
 
 1. **Check each user** — thread context (reactions, replies) vs criteria in the scheduled prompt.
 2. **Remind** — DM if not done: action item + thread link; polite, brief.

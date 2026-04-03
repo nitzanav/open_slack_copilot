@@ -18,25 +18,27 @@ For examples of useful skills, see [`docs/examples/`](docs/examples/).
 
 A development manager posts a message to a user group asking everyone to complete a task (e.g. update on-call rotations, review a document, acknowledge a policy change). Instead of manually chasing people, the manager asks CoPilot to handle follow-ups.
 
+**Follow Up** is a **reply** skill: install it under `~/.open_slack_copilot/skills/reply/follow_up/` (copy from [`skill_examples/reply/follow_up/`](skill_examples/reply/follow_up/SKILL.md)). If you still have it under `skills/watcher/follow_up`, move it to `skills/reply/follow_up` so progressive disclosure can load it. Reply skills are chosen on the same flows as any draft — **`@CoPilot`**, the **Draft with CoPilot** shortcut, and **`/copilot`** in a thread.
+
 ### Flow
 
 1. **Manager sends a message** in a channel mentioning a user group:
    > `@backend-team` Please review the RFC and mark ✅ when done.
 2. **In the thread**, the manager writes:
    > `@CoPilot` please follow up
-3. CoPilot activates the **Follow Up** skill and handles the rest automatically.
+3. Progressive disclosure can include the **Follow Up** reply skill when it matches the thread and instruction; the model then follows that skill (schedule checks, DMs, etc.).
 
 ### What CoPilot does
 
 1. **Infers check frequency** — hourly, daily, or a specific date based on urgency and any stated deadline (default: daily).
-2. **Resolves target users** — fetches the member list of the mentioned user group (or uses individually mentioned users).
+2. **Resolves target users** — reads **`<@U…>`** mentions from thread text where applicable, or uses **`list_usergroup_members`** for user groups (requires bot scope `usergroups:read`).
 3. **Determines completion criteria** — infers the appropriate signal from context: an emoji reaction (e.g. ✅), a thread reply, or an external status update (e.g. Jira ticket).
-4. **Creates a scheduled prompt** — calls the `scheduled_prompt` tool with a description (user IDs, completion criteria, frequency) and an instruction to check each user and DM those who haven't completed.
+4. **Creates a scheduled prompt** — calls the **`schedule_prompt`** tool (`prompt`, `cron`, optional `expires_in_days`) so the check repeats until the job expires.
 5. **On each scheduled run** — checks every user against the criteria and sends a friendly DM reminder to anyone who hasn't completed, with a link back to the original thread.
 
 > **Example DM:** "Hi! Friendly reminder — the backend team was asked to review the RFC. It looks like you haven't confirmed yet. Here's the original thread: _[link]_"
 
-See the full skill definition at [`skill_examples/watcher/follow_up/SKILL.md`](skill_examples/watcher/follow_up/SKILL.md).
+See the full skill definition at [`skill_examples/reply/follow_up/SKILL.md`](skill_examples/reply/follow_up/SKILL.md).
 
 ---
 
@@ -189,9 +191,9 @@ Skills are freeform markdown instructions that guide the bot's reply behavior. T
 ```
 
 - **Default skill** — To override the built-in default reply instruction, create `~/.open_slack_copilot/skills/reply/default.md` with your own markdown. When no skill matches a thread, this file is used instead of the [bundled default](common/progressive_disclosure/default_reply_instruction.md).
-- **Additional skills** — Add folders under `~/.open_slack_copilot/skills/reply/`. Each folder contains a `SKILL.md` file. The bot uses progressive disclosure to automatically select relevant skills per thread.
+- **Additional skills** — Add folders under `~/.open_slack_copilot/skills/reply/`. Each folder contains a `SKILL.md` file. The bot uses progressive disclosure to automatically select relevant skills per thread (including on **`@CoPilot`**, the message shortcut, and **`/copilot`**).
 
-For examples of useful skills, see [`docs/examples/`](docs/examples/).
+For examples of useful skills, see [`docs/examples/`](docs/examples/) and the **Follow Up** reply skill at [`skill_examples/reply/follow_up/SKILL.md`](skill_examples/reply/follow_up/SKILL.md).
 
 ---
 
