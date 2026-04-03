@@ -1,0 +1,43 @@
+# M15 — Follow-ups use case
+
+[← Back to PRD](../../PRD.md)
+
+## Story
+
+A manager posts in a channel (often mentioning a **user group**) asking people to complete something. In the **thread**, they invoke CoPilot (e.g. `@CoPilot please follow up`). CoPilot should infer how often to re-check, who to track, what counts as “done,” register a **recurring** check via [`schedule_prompt`](../../../common/tools/schedule_tool.py#L13-L45) ([`cron`](../../../common/tools/schedule_tool.py#L33-L36), [`expires_in_days`](../../../common/tools/schedule_tool.py#L37-L40)), and on each run **[`send_slack_pm`](../../../common/tools/send_slack_pm.py#L7-L27)** to anyone who has not completed, with a link back to the thread.
+
+- Product write-up: [README — *Use Case: Follow Up on Action Items*](../../../README.md#use-case-follow-up-on-action-items)
+- LLM instructions: [`skill_examples/watcher/follow_up/SKILL.md`](../../../skill_examples/watcher/follow_up/SKILL.md)
+
+## Capability map (code links)
+
+<a id="capability-map-code-links"></a>
+
+Each row links to the repo (or marks **To be done** / **Gap**). **Native LLM** means model reasoning in the agent loop, not a separate Python feature.
+
+| Step | Capability | Where it lives | Status |
+|------|------------|----------------|--------|
+| — | End-to-end narrative | [README — follow-up use case](../../../README.md#use-case-follow-up-on-action-items) | Docs only |
+| 1 | Invoke CoPilot **inside the thread** (`/copilot`, shortcut, `@mention`) | Events: [`slack_listener_with_threads.py`](../../../common/slack/slack_bot/slack_listener_with_threads.py) → [`slack_bot.py`](../../../core/slack_bot.py) → [`prepare_draft`](../../../common/slack/copilot_pipeline.py#L79-L117) | Implemented |
+| 2 | **Infer check frequency** (daily / hourly / exact time) | **Native LLM** capability (reasoning in [`agent_tool_loop`](../../../common/llm/llm_client/llm_client.py#L25)). **No app module** — the model encodes cadence via the scheduler tool’s [**`cron`**](../../../common/tools/schedule_tool.py#L33-L36) and [**`expires_in_days`**](../../../common/tools/schedule_tool.py#L37-L40) parameters ([`schedule_prompt`](../../../common/tools/schedule_tool.py#L13-L45); [step 6](#capability-map-code-links)). | Native LLM + [scheduler params](../../../common/tools/schedule_tool.py#L23-L42) |
+| 3 | **Resolve target users** (user groups → IDs; or read mentions from thread) | **@mentioned individuals:** Slack leaves **`<@U…>`** user tokens in each message’s `text`; the formatted thread includes that raw `text` plus a **Users** roster ([`format_slack_thread_for_prompt`](../../../common/slack/thread_format.py#L49-L95)) — no extra tool to collect those IDs. **User groups:** [`resolve_usergroup_id`](../../../common/slack/slack_api/slack_api.py#L145-L183), [`list_usergroup_members`](../../../common/slack/slack_api/slack_api.py#L186-L201) ([`usergroups.list`](https://api.slack.com/methods/usergroups.list), [`usergroups.users.list`](https://api.slack.com/methods/usergroups.users.list)). LLM tool: [`list_usergroup_members`](../../../common/tools/list_usergroup_members.py); [`dispatch_copilot_tool`](../../../common/slack/copilot_pipeline.py#L129-L136) | Implemented (groups need bot scope [`usergroups:read`](https://api.slack.com/scopes/usergroups:read)) |
+| 4 | **Completion criteria** (emoji, thread reply, external ticket) | Emoji + replies via [`format_slack_thread_for_prompt`](../../../common/slack/thread_format.py#L49-L95) and [`compose_system_prompt`](../../../common/slack/copilot_pipeline.py#L133-L160). **Jira / external:** no tool in repo | Partial; **Jira: to be done** |
+| 5 | **Thread context including reactions** | [`format_slack_thread_for_prompt`](../../../common/slack/thread_format.py#L49-L95), [`_reaction_lines`](../../../common/slack/thread_format.py#L28-L46) → [`compose_system_prompt`](../../../common/slack/copilot_pipeline.py#L133-L160) → [`_format_thread_for_prompt`](../../../common/slack/copilot_pipeline.py#L214-L226) | Implemented |
+| 6 | **Scheduler tool** — register recurring run | LLM function [**`schedule_prompt`**](../../../common/tools/schedule_tool.py#L13-L45) ([`SCHEDULE_PROMPT_TOOL`](../../../common/tools/schedule_tool.py#L13-L45)): params [**`prompt`**](../../../common/tools/schedule_tool.py#L25-L32), [**`cron`**](../../../common/tools/schedule_tool.py#L33-L36) (5-field UTC — hourly, daily, or a specific clock time), [**`expires_in_days`**](../../../common/tools/schedule_tool.py#L37-L40). Handler [`handle_schedule_prompt_call`](../../../common/tools/schedule_tool.py#L56-L77); dispatch [`dispatch_copilot_tool`](../../../common/slack/copilot_pipeline.py#L129-L136) | Implemented |
+| 7 | **Persist jobs + APScheduler** | Write job dir: [`_write_job_to_disk`](../../../common/tools/schedule_tool.py#L105-L120). New jobs: [`register_job_from_disk`](../../../common/tools/prompt_scheduler/prompt_scheduler.py#L51-L70). **Process start:** [`start_scheduler`](../../../common/tools/prompt_scheduler/prompt_scheduler.py#L34-L37) then [`reload_jobs_from_disk`](../../../common/tools/prompt_scheduler/prompt_scheduler.py#L73-L79) (scan `scheduled_prompts` root, re-register each job) — called from [`slack_bot.start`](../../../core/slack_bot.py#L39-L40). Run: [`run_scheduled_prompt`](../../../common/tools/prompt_scheduler/prompt_scheduler.py#L98-L150) | Implemented |
+| 8 | **Scheduled run** → same draft pipeline | [`run_scheduled_prompt`](../../../common/tools/prompt_scheduler/prompt_scheduler.py#L98-L150) → [`prepare_draft`](../../../common/slack/copilot_pipeline.py#L79-L117) with [`excluded_tools=[SCHEDULE_PROMPT_TOOL]`](../../../common/tools/prompt_scheduler/prompt_scheduler.py#L122-L129) | Implemented |
+| 9 | **DM users** (confirmation gate) | [`SEND_SLACK_PM_TOOL`](../../../common/tools/send_slack_pm.py#L7-L27), [`handle_send_slack_pm_call`](../../../common/tools/send_slack_pm.py#L41-L60); UI [`dm_confirmation.py`](../../../common/slack/slack_bot/dm_confirmation.py) | Implemented |
+| 10 | **Disclose Follow Up / watcher skill** in draft | [`select_skills`](../../../common/slack/copilot_pipeline.py#L233-L237) → only [`progressive_disclosure.select_skills("reply", ...)`](../../../common/progressive_disclosure/progressive_disclosure.py#L24-L36). [`_SKILL_KINDS`](../../../common/progressive_disclosure/progressive_disclosure.py#L8) includes `watcher` but pipeline does not load it into the prompt | **To be done** |
+| 11 | **Skill doc vs tool schema** | Example skill names [`scheduled_prompt`](../../../skill_examples/watcher/follow_up/SKILL.md); actual tool is [`schedule_prompt`](../../../common/tools/schedule_tool.py#L16). Align [SKILL.md](../../../skill_examples/watcher/follow_up/SKILL.md) / [README](../../../README.md#use-case-follow-up-on-action-items) or extend the tool | **Gap** |
+
+## Summary
+
+**Working today:** [`slack_listener_with_threads.py`](../../../common/slack/slack_bot/slack_listener_with_threads.py) / [`slack_bot.py`](../../../core/slack_bot.py) → [`prepare_draft`](../../../common/slack/copilot_pipeline.py#L79-L117); [`compose_system_prompt`](../../../common/slack/copilot_pipeline.py#L133-L160) + [`format_slack_thread_for_prompt`](../../../common/slack/thread_format.py#L49-L95); [`list_usergroup_members`](../../../common/tools/list_usergroup_members.py) + [`slack_api` user group helpers](../../../common/slack/slack_api/slack_api.py); [**`schedule_prompt`**](../../../common/tools/schedule_tool.py#L13-L45) with [`cron`](../../../common/tools/schedule_tool.py#L33-L36) and [`expires_in_days`](../../../common/tools/schedule_tool.py#L37-L40); [`prompt_scheduler.py`](../../../common/tools/prompt_scheduler/prompt_scheduler.py); [`send_slack_pm`](../../../common/tools/send_slack_pm.py#L7-L27) + [`dm_confirmation.py`](../../../common/slack/slack_bot/dm_confirmation.py).
+
+**Still open:** [step 10 — watcher disclosure](#capability-map-code-links) ([`select_skills`](../../../common/slack/copilot_pipeline.py#L233-L237)); [step 4 — Jira / external status](#capability-map-code-links) (no integration in repo); [step 11 — skill vs tool schema](#capability-map-code-links) ([`SKILL.md`](../../../skill_examples/watcher/follow_up/SKILL.md), [`schedule_tool.py`](../../../common/tools/schedule_tool.py#L13-L45)).
+
+## Related milestones
+
+- [M6 — Send Slack PM](../m6_send_slack_pm/m6_send_slack_pm.md)
+- [M7 — Skill scheduler](../m7_skill_scheduler/m7_skill_scheduler.md) — design notes; shipped stack is [`schedule_tool.py`](../../../common/tools/schedule_tool.py) + [`prompt_scheduler.py`](../../../common/tools/prompt_scheduler/prompt_scheduler.py)
+- [M4 — Watch channels and match skills](../m4_watch_channels_match_skills/m4_watch_channels_match_skills.md)
