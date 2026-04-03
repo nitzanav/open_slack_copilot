@@ -132,10 +132,10 @@ llm_action_history_limit: 10
 
 | Piece | Location | Responsibility |
 |-------|----------|----------------|
-| Log I/O, path helpers, summarizer wrapper | `common/slack/llm_action_log.py` (new) | `agent_logs_root()`, `append_entry()`, `read_recent_for_thread()`, `summarize_copilot_run()` |
+| Log I/O, path helpers, summarizer wrapper | [`common/slack/agent_log.py`](../../../common/slack/agent_log.py) (import as `agent_log`) | `agent_log.read_recent_for_thread()`, `agent_log.append_entry()`, `agent_log.format_agent_log_section()`, `agent_log.summarize_copilot_run()`, etc. |
 | Tool loop with trace | `common/llm/llm_client/llm_client.py` | `agent_tool_loop` returns final text **and** ordered list of tool executions |
 | Orchestration | `common/slack/copilot_pipeline.py` | `prepare_draft`: read history → `compose_system_prompt` → tool loop → summarize → append |
-| Prompt template | `common/slack/draft_prompt.md` | Optional `{agent_log}` block (agent log section) |
+| Prompt template | `common/slack/draft_prompt.md` | Optional `{agent_log_recent_thread_history}` block (agent log section) |
 | Entry points | `slack_listener_with_threads.py`, `draft_revise_actions.py`, `prompt_scheduler.py`, `core/slack_bot.py` | Pass `copilot_trigger` / `copilot_action` |
 
 ### 2.2 Repository root resolution
@@ -205,7 +205,7 @@ def compose_system_prompt(
 ```
 
 - `agent_log_section` is either `""` or the full **Agent log** subsection: `## Agent log` plus newline-separated compact lines per §1.8 (no channel/thread per line).
-- `draft_prompt.md` gains a placeholder `{agent_log}`, placed **after** `## Thread` and **before** `## Instruction` so schedules see thread content first, then the agent log, then the current ask.
+- `draft_prompt.md` gains a placeholder `{agent_log_recent_thread_history}`, placed **before** `## Thread` so the model sees prior agent log lines, then the thread, then the instruction block.
 
 ### 2.7 Summarization (`summarize_copilot_run`)
 
@@ -220,14 +220,14 @@ sequenceDiagram
   participant Slack
   participant Handler as EntryHandler
   participant Prep as prepare_draft
-  participant Log as llm_action_log
+  participant Log as agent_log
   participant Compose as compose_system_prompt
   participant Loop as agent_tool_loop
   participant LLM as llm_client
 
   Slack->>Handler: event
   Handler->>Prep: copilot_trigger, copilot_action
-  Prep->>Log: read_recent_for_thread
+  Prep->>Log: agent_log.read_recent_for_thread
   Log-->>Prep: entries
   Prep->>Compose: agent_log_section
   Compose-->>Prep: system_prompt
@@ -241,7 +241,7 @@ sequenceDiagram
 
 ### 2.9 Testing strategy
 
-- **Unit:** `llm_action_log` — append twice, read tail, corrupt middle line skipped, limit respected.
+- **Unit:** `agent_log` module — append twice, read tail, corrupt middle line skipped, limit respected.
 - **Unit:** `prepare_draft` with mocks — when trigger/action set, `compose_system_prompt` receives a non-empty **Agent log** section if log file seeded in tmp_path (monkeypatch `agent_logs` root).
 - **Unit:** `agent_tool_loop` — fake tool call produces trace entries with expected names.
 - Existing tests that omit `copilot_trigger` / `copilot_action` remain unchanged.
@@ -262,7 +262,7 @@ sequenceDiagram
 
 ## 3. Implementation checklist (for PRs)
 
-- [ ] Add `common/slack/llm_action_log.py`
+- [ ] Add [`common/slack/agent_log.py`](../../../common/slack/agent_log.py)
 - [ ] Extend `agent_tool_loop` + `prepare_draft` + `compose_system_prompt` + `draft_prompt.md`
 - [ ] Wire triggers from slash / shortcut / mention / revise / scheduler
 - [ ] `default.yaml`: `llm_action_history_limit`

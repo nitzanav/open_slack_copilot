@@ -5,6 +5,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from config.config import settings
+from common.llm.llm_client.llm_client import AgentToolLoopResult
 from common.slack.copilot_pipeline import ThreadFetchError
 from core.slack_bot import (
     compose_system_prompt, prepare_draft, _handle_copilot,
@@ -59,6 +60,13 @@ class TestComposeSystemPrompt:
         examples = [{"question": "How?", "answer": "Like this."}]
         prompt = compose_system_prompt(THREAD_3, "", examples=examples)
         assert "Example Replies" in prompt
+
+    def test_includes_agent_log_section(self):
+        section = "## Agent log\n\n[2026-01-01 12:00] slash command - suggested draft: prior\n"
+        prompt = compose_system_prompt(THREAD_3, "go", agent_log_section=section)
+        assert "## Agent log" in prompt
+        assert "slash command" in prompt
+        assert prompt.index("## Agent log") < prompt.index("## Thread")
 
     def test_prompt_ordering(self):
         prompt = compose_system_prompt(
@@ -147,7 +155,7 @@ class TestPrepareDraft:
         mock_rag.query_cross_channel.return_value = [{"text": "cross rag", "channel": "eng"}]
         mock_rag.format_rag_context_block.return_value = "unknown [-]: channel rag"
         mock_rag.format_cross_channel_rag_text.return_value = "unknown [-]: cross rag"
-        mock_llm.agent_tool_loop.return_value = "Full draft"
+        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult("Full draft", [])
         mock_fetch.return_value = THREAD_3
 
         original = list(settings.rag.cross_channel)
@@ -178,7 +186,7 @@ class TestPrepareDraftPreloadedMessages:
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []
         mock_rag.query_cross_channel.return_value = []
-        mock_llm.agent_tool_loop.return_value = "ok"
+        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult("ok", [])
 
         result = prepare_draft("C", "T1", "U1", "", thread_messages=THREAD_3)
         assert result == "ok"
@@ -199,7 +207,7 @@ class TestHandleCopilot:
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []
         mock_rag.query_cross_channel.return_value = []
-        mock_llm.agent_tool_loop.return_value = "Here is my draft"
+        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult("Here is my draft", [])
         mock_fetch.return_value = THREAD_3
 
         _handle_copilot("C123", "T123", "U001", "help")

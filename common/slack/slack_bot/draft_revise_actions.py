@@ -385,6 +385,8 @@ def register_draft_revise_handlers(app: App) -> None:
                 user_text,
                 channel_name=channel_name,
                 thread_messages=thread_messages,
+                copilot_trigger="message_shortcut_revise",
+                copilot_action="suggested_draft",
             )
         except ThreadFetchError:
             slack_api.send_ephemeral(

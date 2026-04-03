@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+from common.llm.llm_client.llm_client import AgentToolLoopResult
 from common.slack.copilot_pipeline import (
     prepare_draft,
     resolve_copilot_slack_context,
@@ -56,7 +57,7 @@ class TestPrepareDraftExcludedTools:
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []
         mock_rag.query_cross_channel.return_value = []
-        mock_llm.agent_tool_loop.return_value = "ok"
+        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult("ok", [])
         mock_fetch.return_value = [{"text": "x"}]
 
         prepare_draft(

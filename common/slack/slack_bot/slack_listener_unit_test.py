@@ -58,6 +58,8 @@ class TestRegisterCopilotCommand:
         handler.assert_called_once_with(
             channel_id="C1", thread_ts="T1", user_id="U1",
             user_text="help me", channel_name=None, context_kind="thread",
+            copilot_trigger="slash_command",
+            copilot_action="suggested_draft",
         )
 
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
@@ -104,6 +106,8 @@ class TestRegisterCopilotShortcut:
             channel_id="C1", thread_ts="1516229200.000000", user_id="U1",
             user_text="", thread_messages=msgs, channel_name="team-chat",
             context_kind="thread",
+            copilot_trigger="message_shortcut",
+            copilot_action="suggested_draft",
         )
 
     @patch("common.slack.slack_bot.slack_listener_with_threads.resolve_copilot_slack_context")
@@ -129,6 +133,8 @@ class TestRegisterCopilotShortcut:
             channel_id="C2", thread_ts="1516229207.000133", user_id="U1",
             user_text="", thread_messages=msgs, channel_name=None,
             context_kind="channel_tail",
+            copilot_trigger="message_shortcut",
+            copilot_action="suggested_draft",
         )
 
 
@@ -168,6 +174,8 @@ class TestRegisterCopilotAppMention:
             thread_messages=msgs,
             channel_name=None,
             context_kind="channel_tail",
+            copilot_trigger="app_mention",
+            copilot_action="suggested_draft",
         )
 
     @patch("common.slack.slack_bot.slack_listener_with_threads.resolve_copilot_slack_context")
@@ -202,6 +210,8 @@ class TestRegisterCopilotAppMention:
             thread_messages=msgs,
             channel_name=None,
             context_kind="thread",
+            copilot_trigger="app_mention",
+            copilot_action="suggested_draft",
         )
 
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")

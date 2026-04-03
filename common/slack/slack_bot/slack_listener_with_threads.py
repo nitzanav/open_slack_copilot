@@ -38,6 +38,8 @@ def register_copilot_command(app: App, handler):
             user_text=user_text,
             channel_name=command.get("channel_name"),
             context_kind="thread",
+            copilot_trigger="slash_command",
+            copilot_action="suggested_draft",
         )
 
 
@@ -68,6 +70,8 @@ def register_copilot_shortcut(app: App, handler):
             thread_messages=thread_messages,
             channel_name=shortcut["channel"].get("name"),
             context_kind=context_kind,
+            copilot_trigger="message_shortcut",
+            copilot_action="suggested_draft",
         )
 
 
@@ -108,6 +112,8 @@ def register_copilot_app_mention(app: App, handler, bot_user_id: str | None = No
             thread_messages=thread_messages,
             channel_name=None,
             context_kind=context_kind,
+            copilot_trigger="app_mention",
+            copilot_action="suggested_draft",
         )
 
 

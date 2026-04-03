@@ -4,6 +4,8 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
+from common.llm.llm_client.llm_client import AgentToolLoopResult
+
 FIXTURES = Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"
 
 
@@ -37,7 +39,7 @@ class TestSlashCommandEndToEnd:
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
     def test_full_chain(self, mock_slack_api, mock_llm, mock_pd, mock_rag, mock_fetch):
         mock_fetch.return_value = THREAD_3
-        mock_llm.agent_tool_loop.return_value = "Generated draft reply"
+        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult("Generated draft reply", [])
         _mock_bot_deps(mock_llm, mock_pd, mock_rag)
 
         from common.slack.slack_bot.slack_listener_with_threads import register_copilot_command
@@ -74,7 +76,7 @@ class TestSlashCommandEndToEnd:
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
     def test_singleton_thread_end_to_end(self, mock_slack_api, mock_llm, mock_pd, mock_rag, mock_fetch):
         mock_fetch.return_value = THREAD_1
-        mock_llm.agent_tool_loop.return_value = "Singleton draft"
+        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult("Singleton draft", [])
         _mock_bot_deps(mock_llm, mock_pd, mock_rag)
 
         from common.slack.slack_bot.slack_listener_with_threads import register_copilot_command
@@ -115,6 +117,8 @@ class TestSlashCommandEndToEnd:
             user_text="",
             channel_name=None,
             context_kind="thread",
+            copilot_trigger="slash_command",
+            copilot_action="suggested_draft",
         )
 
     def test_callback_registration(self):

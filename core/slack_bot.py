@@ -54,6 +54,8 @@ def _handle_copilot(
     channel_name: str | None = None,
     thread_messages: list[dict] | None = None,
     context_kind: str = "thread",
+    copilot_trigger: str | None = None,
+    copilot_action: str | None = None,
 ):
     try:
         draft = prepare_draft(
@@ -63,6 +65,8 @@ def _handle_copilot(
             user_text,
             channel_name=channel_name,
             thread_messages=thread_messages,
+            copilot_trigger=copilot_trigger,
+            copilot_action=copilot_action,
         )
         send_draft_ephemeral_with_revise(
             channel_id,
