@@ -15,13 +15,18 @@ RAG_STORAGE ?= .rag_storage
 .venv:
 	$(PYTHON) -m venv .venv
 
-install: .venv
+# Re-run pip only when requirements.txt changes (keeps repeat `make test` fast).
+# `| .venv` is order-only so .venv directory mtime changes do not force reinstall.
+.venv/.installed: requirements.txt | .venv
 	.venv/bin/pip install -r requirements.txt
+	@touch .venv/.installed
+
+install: .venv/.installed
 
 run:
 	.venv/bin/python -m core.slack_bot
 
-test:
+test: install
 	.venv/bin/pytest
 
 docker-build:
