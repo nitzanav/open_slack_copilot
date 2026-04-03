@@ -3,4 +3,4 @@
 Related documentation:
 
 - [Product requirements (PRD)](PRD.md)
-- [Technical design](technical_design.md)
+- [Technical design](development_guidelines.md)
