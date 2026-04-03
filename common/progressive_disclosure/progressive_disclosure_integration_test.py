@@ -3,6 +3,8 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
+from common.llm.llm_client.llm_client import AgentToolLoopResult
+
 FIXTURES = Path(__file__).parent.parent.parent / "tests" / "fixtures"
 
 THREAD = [
@@ -38,7 +40,7 @@ class TestEndToEndSkillSelection:
         (skill_dir / "code_review" / "SKILL.md").write_text("Review code carefully.")
 
         mock_pd_llm.generate.return_value = '["reply/code_review"]'
-        mock_bot_llm.agent_tool_loop.return_value = "Draft with code review skill"
+        mock_bot_llm.agent_tool_loop.return_value = AgentToolLoopResult("Draft with code review skill", [])
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []

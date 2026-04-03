@@ -2,10 +2,12 @@
 
 import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
 from common.llm.llm_client import llm_client
+from common.slack import agent_log
 from common.progressive_disclosure import progressive_disclosure
 from common.slack.slack_api import slack_api
 from common.slack.slack_rag import slack_rag
@@ -94,6 +96,8 @@ def prepare_draft(
     excluded_tools: list[dict] | None = None,
     tool_dispatch: Callable[[str, str], str] | None = None,
     thread_messages: list[dict] | None = None,
+    copilot_trigger: str | None = None,
+    copilot_action: str | None = None,
 ) -> str:
     if thread_messages is None:
         thread_messages = fetch_thread_messages(channel_id, thread_ts)
@@ -104,6 +108,12 @@ def prepare_draft(
         channel_id, thread_ts, user_id, thread_text
     )
     examples = load_examples()
+    agent_log_section = ""
+    if copilot_trigger is not None and copilot_action is not None:
+        prior = agent_log.read_recent_for_thread(
+            channel_id, thread_ts, agent_log.llm_action_history_limit(),
+        )
+        agent_log_section = agent_log.format_agent_log_section(prior)
     prompt = compose_system_prompt(
         thread_messages,
         user_text,
@@ -114,16 +124,35 @@ def prepare_draft(
         channel_id=channel_id,
         thread_ts=thread_ts,
         channel_name=channel_name,
+        agent_log_section=agent_log_section,
     )
     effective_tools = _resolve_tools(tools, excluded_tools)
     effective_dispatch = tool_dispatch or dispatch_copilot_tool
     with draft_invocation_context(channel_id, thread_ts, user_id):
-        return llm_client.agent_tool_loop(
+        loop_result = llm_client.agent_tool_loop(
             prompt,
             "Produce the draft reply. Use tools only when the user's skills require it.",
             effective_tools,
             effective_dispatch,
         )
+    draft = loop_result.text
+    if copilot_trigger is not None and copilot_action is not None:
+        summary = agent_log.summarize_copilot_run(
+            trigger=copilot_trigger,
+            action=copilot_action,
+            user_text=user_text,
+            final_text=draft,
+            tool_trace=loop_result.tool_trace,
+        )
+        agent_log.append_entry({
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "channel": channel_id,
+            "thread_ts": thread_ts,
+            "trigger": copilot_trigger,
+            "action": copilot_action,
+            "summary": summary,
+        })
+    return draft
 
 
 def dispatch_copilot_tool(name: str, arguments_json: str) -> str:
@@ -150,8 +179,12 @@ def compose_system_prompt(
     channel_id: str | None = None,
     thread_ts: str | None = None,
     channel_name: str | None = None,
+    agent_log_section: str = "",
 ) -> str:
     channel_display = _channel_display_name(channel_name)
+    agent_log_recent_thread_history = (
+        (agent_log_section + "\n") if agent_log_section.strip() else ""
+    )
     rendered = PROMPT_TEMPLATE.format(
         skills=_format_skills_section(skills),
         channel_context=_format_channel_rag_section(
@@ -159,6 +192,7 @@ def compose_system_prompt(
         ),
         cross_channel_context=_format_cross_channel_rag_section(cross_rag_results),
         examples=_format_examples_section(examples),
+        agent_log_recent_thread_history=agent_log_recent_thread_history,
         thread=_format_thread_for_prompt(
             thread_messages,
             channel_id=channel_id,

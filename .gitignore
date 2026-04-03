@@ -211,3 +211,6 @@ __marimo__/
 
 # RAG local storage
 .rag_storage/
+
+# Copilot structured agent log (NDJSON)
+/agent_logs/

@@ -4,6 +4,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from common.llm.llm_client.llm_client import AgentToolLoopResult
+
 FIXTURES = Path(__file__).parent.parent / "tests" / "fixtures"
 
 
@@ -60,7 +62,7 @@ class TestMessageShortcutEndToEnd:
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
     def test_shortcut_full_chain_sends_draft(self, mock_slack_api, mock_llm, mock_pd, mock_rag, mock_fetch):
         mock_fetch.return_value = THREAD_3
-        mock_llm.agent_tool_loop.return_value = "Generated draft from shortcut"
+        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult("Generated draft from shortcut", [])
         _mock_bot_deps(mock_llm, mock_pd, mock_rag)
 
         from common.slack.slack_bot.slack_listener_with_threads import register_copilot_shortcut
@@ -99,7 +101,7 @@ class TestMessageShortcutEndToEnd:
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
     def test_shortcut_channel_message_uses_message_ts(self, mock_slack_api, mock_llm, mock_pd, mock_rag, mock_tail):
         mock_tail.return_value = THREAD_3
-        mock_llm.agent_tool_loop.return_value = "Draft for channel message"
+        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult("Draft for channel message", [])
         _mock_bot_deps(mock_llm, mock_pd, mock_rag)
 
         from common.slack.slack_bot.slack_listener_with_threads import register_copilot_shortcut

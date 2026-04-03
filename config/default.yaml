@@ -8,6 +8,8 @@ slack_bot:
   config_owner_user_id: ""
   # For @mentions and the message shortcut on a channel-root post (no thread), use this many recent channel messages as context.
   copilot_channel_context_limit: 30
+  # Prior agent log lines injected into compose_system_prompt (per thread).
+  llm_action_history_limit: 10
 
 scheduled_prompts:
   storage_path: "~/.open_slack_copilot/scheduled_prompts"

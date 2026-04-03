@@ -126,6 +126,8 @@ def run_scheduled_prompt(job_id: str):
             user_id,
             user_text=prompt_text,
             excluded_tools=[SCHEDULE_PROMPT_TOOL],
+            copilot_trigger="scheduled_prompt",
+            copilot_action="activated_scheduled_prompt",
         )
     except ThreadFetchError:
         remove_job(job_id, delete_files=True)
