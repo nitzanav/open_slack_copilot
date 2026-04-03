@@ -1,0 +1,13 @@
+---
+description: Development workflow rules
+alwaysApply: true
+---
+
+# Development Workflow
+
+1. **Context** — Read `ai_docs/ai_overview.md` before starting
+2. **Best Practices** — YAGNI, KISS, DRY, SOLID
+3. **Coding Guidelines** — Follow `ai_docs/coding_guidelines.md`
+4. **Checklists** — Mark every step when working with a checklist/todo
+
+**Responses** — Summarize briefly. Elaborate only when asked.
