@@ -17,11 +17,11 @@
   - Using list of predefined "reply skills" selected via progressive disclosure
 - **Draft Revise** — refine a generated draft with free-text instructions via a modal
 - **Send DM** — LLM can invoke `send_slack_pm` tool; the config owner approves/rejects via ephemeral confirmation
-- **Scheduled prompts** — LLM can invoke `schedule_prompt` tool to register a cron job that re-runs a prompt on a thread (e.g. followup reminders)
+- **Scheduled prompts** — LLM can invoke `schedule_prompt` tool to register a cron job that re-runs a prompt on a thread (e.g. follow-up reminders); see [M15](milestones/m15_follow_ups_use_case/m15_follow_ups_use_case.md) for gaps vs the full follow-ups story
 
 ### Future / Not Implemented
 
-- **Followups** — When I request to followup to report when done to a group of people, remind them.
+- [**Follow-ups use case (planned)**](milestones/m15_follow_ups_use_case/m15_follow_ups_use_case.md) — thread-triggered reminders for groups; capability map and code links in milestone doc (user-group expansion, watcher skill in draft flow, and skill/tool alignment still open)
 - **Watching Channel supervision** — requests are handled properly? on time?
 - **Create jira ticket** for this action item according to my policy
 - **Remind me** if I didnt reply on time
@@ -54,6 +54,7 @@
   - Scheduled runs deliver draft ephemerals to the **config owner** (not the original user)
   - Nested scheduling is prevented (`schedule_prompt` tool excluded from scheduled runs)
 - **Send Slack PM** — LLM tool `send_slack_pm`; resolves user, queues DM for **config owner approval** via ephemeral Block Kit (Send / Cancel)
+- **User group members** — LLM tool `list_usergroup_members`; Slack API `usergroups.list` + `usergroups.users.list` via `slack_api` (requires bot scope `usergroups:read`)
 - **Example threads** — hard-coded file (`common/slack/example_threads.json`) loaded into the system prompt
 
 
@@ -82,6 +83,7 @@
 
 ### Not Implemented
 
+- [**M15: Follow-ups use case**](milestones/m15_follow_ups_use_case/m15_follow_ups_use_case.md) — document and track implementation of the [Follow Up skill example](../skill_examples/watcher/follow_up/SKILL.md): infer cadence, resolve targets, completion checks, `schedule_prompt`, scheduled re-runs, DMs; maps each capability to code or **to be done**
 - [**M2: Auto-draft replies to mentions**](milestones/m2_auto_draft_mentions/m2_auto_draft_mentions.md) — listen for messages where the user is @mentioned, use reply skills (progressive disclosure) to draft a reply automatically. Send ephemeral with suggested draft. Requires a `message` event listener (not yet wired).
   - reuses M1 flow with reply skills
   - use case — user wants to draft answers for all their mentions

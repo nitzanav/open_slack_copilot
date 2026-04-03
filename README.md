@@ -103,7 +103,8 @@ Paste this when creating the app from a manifest:
         "app_mentions:read",
         "chat:write",
         "channels:history",
-        "groups:history"
+        "groups:history",
+        "usergroups:read"
       ]
     }
   },
