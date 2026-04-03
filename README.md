@@ -14,6 +14,32 @@ For examples of useful skills, see [`docs/examples/`](docs/examples/).
 
 ---
 
+## Use Case: Follow Up on Action Items
+
+A development manager posts a message to a user group asking everyone to complete a task (e.g. update on-call rotations, review a document, acknowledge a policy change). Instead of manually chasing people, the manager asks CoPilot to handle follow-ups.
+
+### Flow
+
+1. **Manager sends a message** in a channel mentioning a user group:
+   > `@backend-team` Please review the RFC and mark ✅ when done.
+2. **In the thread**, the manager writes:
+   > `@CoPilot` please follow up
+3. CoPilot activates the **Follow Up** skill and handles the rest automatically.
+
+### What CoPilot does
+
+1. **Infers check frequency** — hourly, daily, or a specific date based on urgency and any stated deadline (default: daily).
+2. **Resolves target users** — fetches the member list of the mentioned user group (or uses individually mentioned users).
+3. **Determines completion criteria** — infers the appropriate signal from context: an emoji reaction (e.g. ✅), a thread reply, or an external status update (e.g. Jira ticket).
+4. **Creates a scheduled prompt** — calls the `scheduled_prompt` tool with a description (user IDs, completion criteria, frequency) and an instruction to check each user and DM those who haven't completed.
+5. **On each scheduled run** — checks every user against the criteria and sends a friendly DM reminder to anyone who hasn't completed, with a link back to the original thread.
+
+> **Example DM:** "Hi! Friendly reminder — the backend team was asked to review the RFC. It looks like you haven't confirmed yet. Here's the original thread: _[link]_"
+
+See the full skill definition at [`skill_examples/watcher/follow_up/SKILL.md`](skill_examples/watcher/follow_up/SKILL.md).
+
+---
+
 ## Reply with Open Slack CoPilot
 
 Go to a message you were mentioned in (or any message you want to draft a reply for):
