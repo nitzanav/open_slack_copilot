@@ -14,14 +14,19 @@
   - By default, use RAG of the relevant channel
   - Using list of predefined "reply skills"
 - **Followups** — When I request to followup to report when done to a group of people, remind them.
-- **Tech leader alerts** — notify when something requires attention
 - **Watching Channel supervision** — requests are handled properly? on time?
-- **Notify me** when they talk messages queues
+- **Create jira ticket** for this action item according to my policy
 - **Remind me** if I didnt reply on time
 - **Urgent pending replies** — whenever there is a talk on urgent bug, notify me in DM
+- **Tech leader alerts** — let me know when there is a significant architectural change without a discussion
+- **Notify me** when they talk about my a feature that I part of
 - **Answer support tickets**
-- **Create jira ticket** for this action item according to my policy
 - **Notify when there is a customer with too many issue**
+- Notify others - 
+  - then they pasted API key in a public channel
+  - Don't change data of merchants, even on their behalf
+  - they didn't respond fast enough - example: dev-on-call didn't see an alert
+
 
 ## Skills/Tools
 
