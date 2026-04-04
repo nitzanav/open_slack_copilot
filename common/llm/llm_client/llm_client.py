@@ -1,6 +1,6 @@
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable
 
 import litellm
@@ -23,6 +23,21 @@ class ToolCallRecord:
 class AgentToolLoopResult:
     text: str
     tool_trace: list[ToolCallRecord]
+    tool_errors: list[str] = field(default_factory=list)
+
+
+def _tool_error_line(tool_name: str, result: str) -> str | None:
+    """If the tool returned JSON with an 'error' key, return a line for the user-visible draft."""
+    try:
+        obj = json.loads(result)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(obj, dict):
+        return None
+    err = obj.get("error")
+    if not isinstance(err, str) or not err.strip():
+        return None
+    return f"{tool_name}: {err.strip()}"
 
 
 def _truncate_preview(content: str, max_len: int = _MAX_TOOL_RESULT_PREVIEW) -> str:
@@ -58,6 +73,7 @@ def agent_tool_loop(
         messages.append({"role": "user", "content": user_prompt})
 
     tool_trace: list[ToolCallRecord] = []
+    tool_errors: list[str] = []
 
     for _ in range(_MAX_TOOL_ROUNDS):
         response = litellm.completion(
@@ -66,11 +82,13 @@ def agent_tool_loop(
         msg = response.choices[0].message
         tool_calls = getattr(msg, "tool_calls", None) or []
         if not tool_calls:
-            return AgentToolLoopResult((msg.content or "").strip(), tool_trace)
+            return AgentToolLoopResult((msg.content or "").strip(), tool_trace, tool_errors)
         _append_assistant_tool_calls(messages, msg, tool_calls)
-        _run_tools_and_append_results(messages, tool_calls, run_tool, tool_trace)
+        _run_tools_and_append_results(
+            messages, tool_calls, run_tool, tool_trace, tool_errors
+        )
 
-    return AgentToolLoopResult("", tool_trace)
+    return AgentToolLoopResult("", tool_trace, tool_errors)
 
 
 def _append_assistant_tool_calls(
@@ -98,15 +116,20 @@ def _run_tools_and_append_results(
     tool_calls: list,
     run_tool: Callable[[str, str], str],
     tool_trace: list[ToolCallRecord],
+    tool_errors: list[str],
 ):
     for tc in tool_calls:
+        name = tc.function.name
         try:
-            result = run_tool(tc.function.name, tc.function.arguments or "{}")
+            result = run_tool(name, tc.function.arguments or "{}")
         except Exception as e:
             result = json.dumps({"error": str(e)})
+        err_line = _tool_error_line(name, result)
+        if err_line:
+            tool_errors.append(err_line)
         tool_trace.append(
             ToolCallRecord(
-                name=tc.function.name,
+                name=name,
                 result_preview=_truncate_preview(result),
             )
         )

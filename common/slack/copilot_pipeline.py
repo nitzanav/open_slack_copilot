@@ -136,6 +136,9 @@ def prepare_draft(
             effective_dispatch,
         )
     draft = loop_result.text
+    if loop_result.tool_errors:
+        err_lines = "\n".join(f"• {line}" for line in loop_result.tool_errors)
+        draft = f"{draft}\n\n---\n*Tool errors*\n{err_lines}".strip()
     if copilot_trigger is not None and copilot_action is not None:
         summary = agent_log.summarize_copilot_run(
             trigger=copilot_trigger,

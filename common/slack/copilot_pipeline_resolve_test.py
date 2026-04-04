@@ -68,3 +68,35 @@ class TestPrepareDraftExcludedTools:
         assert SCHEDULE_PROMPT_TOOL not in tools_passed
         assert SEND_SLACK_PM_TOOL in tools_passed
         assert LIST_USERGROUP_MEMBERS_TOOL in tools_passed
+
+
+class TestPrepareDraftToolErrorsInEphemeral:
+    @patch("common.slack.copilot_pipeline.fetch_thread_messages")
+    @patch("common.slack.copilot_pipeline.slack_rag")
+    @patch("common.slack.copilot_pipeline.progressive_disclosure")
+    @patch("common.slack.copilot_pipeline.llm_client")
+    @patch("common.slack.copilot_pipeline.slack_api")
+    def test_appends_tool_errors_to_draft_text(
+        self, mock_slack, mock_llm, mock_pd, mock_rag, mock_fetch,
+    ):
+        mock_pd.select_skills.return_value = []
+        mock_pd.get_default_instruction.return_value = "default"
+        mock_rag.is_ready.return_value = True
+        mock_rag.query_channel.return_value = []
+        mock_rag.missing_channels.return_value = []
+        mock_rag.query_cross_channel.return_value = []
+        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult(
+            "Draft body.",
+            [],
+            tool_errors=[
+                "send_slack_pm: Error: slack_bot.config_owner_user_id is not set",
+            ],
+        )
+        mock_fetch.return_value = [{"text": "x"}]
+
+        out = prepare_draft("C", "T1", "U1", "hi")
+
+        assert "Draft body." in out
+        assert "*Tool errors*" in out
+        assert "config_owner_user_id" in out
+        assert "send_slack_pm:" in out
