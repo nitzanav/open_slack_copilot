@@ -41,13 +41,12 @@ def test_run_calls_prepare_draft_with_prompt(mock_send, tmp_path, monkeypatch):
     monkeypatch.setattr(sched, "scheduled_prompts_root", lambda: tmp_path)
     prompt_text = "Remind everyone about the deadline."
     _write_job(tmp_path, "sched_ok", _future_meta(), prompt=prompt_text)
-    monkeypatch.setattr(sched, "_owner_id", lambda: "UOWNER")
 
     sched.run_scheduled_prompt("sched_ok")
 
     mock_send.assert_called_once()
     call_kw = mock_send.call_args
-    assert call_kw[0] == ("C1", "T1", "UOWNER", "U1", prompt_text)
+    assert call_kw[0] == ("C1", "T1", "U1", "U1", prompt_text)
     assert call_kw[1]["context_kind"] == "thread"
     from common.tools.schedule_tool import SCHEDULE_PROMPT_TOOL
 
@@ -80,32 +79,30 @@ def test_thread_inaccessible_sends_invite_does_not_remove_job(
     from common.slack.slack_bot.draft_delivery import CHANNEL_INVITE_EPHEMERAL
 
     mock_fetch.side_effect = ThreadFetchError("gone")
-    monkeypatch.setattr(sched, "_owner_id", lambda: "UOWNER")
 
     sched.run_scheduled_prompt("sched_bad")
 
     mock_remove.assert_not_called()
     mock_slack.send_ephemeral.assert_called_once_with(
-        "C1", "T1", "UOWNER", CHANNEL_INVITE_EPHEMERAL,
+        "C1", "T1", "U1", CHANNEL_INVITE_EPHEMERAL,
     )
 
 
 @patch("common.slack.slack_bot.draft_delivery.fetch_thread_messages")
 @patch("common.slack.slack_bot.draft_delivery.prepare_draft")
 @patch("common.slack.slack_bot.draft_revise_actions.send_draft_ephemeral_with_revise")
-def test_result_sent_to_owner(mock_send_rev, mock_draft, mock_fetch, tmp_path, monkeypatch):
+def test_result_sent_to_scheduling_user(mock_send_rev, mock_draft, mock_fetch, tmp_path, monkeypatch):
     monkeypatch.setattr(sched, "scheduled_prompts_root", lambda: tmp_path)
-    _write_job(tmp_path, "sched_owner", _future_meta())
+    _write_job(tmp_path, "sched_user", _future_meta())
     mock_fetch.return_value = []
     mock_draft.return_value = "Here is the draft"
-    monkeypatch.setattr(sched, "_owner_id", lambda: "UOWNER")
 
-    sched.run_scheduled_prompt("sched_owner")
+    sched.run_scheduled_prompt("sched_user")
 
     mock_send_rev.assert_called_once_with(
         "C1",
         "T1",
-        "UOWNER",
+        "U1",
         "U1",
         "Here is the draft",
         context_kind="thread",

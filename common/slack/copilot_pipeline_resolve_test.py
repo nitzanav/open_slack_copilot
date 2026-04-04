@@ -89,7 +89,7 @@ class TestPrepareDraftToolErrorsInEphemeral:
             "Draft body.",
             [],
             tool_errors=[
-                "send_slack_pm: Error: slack_bot.config_owner_user_id is not set",
+                "send_slack_pm: Error: requester_user_id is required to send DM confirmation.",
             ],
         )
         mock_fetch.return_value = [{"text": "x"}]
@@ -98,5 +98,5 @@ class TestPrepareDraftToolErrorsInEphemeral:
 
         assert "Draft body." in out
         assert "*Tool errors*" in out
-        assert "config_owner_user_id" in out
+        assert "requester_user_id" in out
         assert "send_slack_pm:" in out

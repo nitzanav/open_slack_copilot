@@ -9,7 +9,7 @@
 - **Expected to mostly not act** — ~90% of messages won't match any skill; this is normal
 - **Enrich with thread context** — when a skill matches, fetch full thread
 - **Reuse M1 flow** — call `prepare_draft_order` with thread context, matched skills, no user text
-- **Send ephemeral to config owner** — the configured user (bot owner) receives the draft
+- **Send ephemeral to watcher user** — each watcher skill defines a `watcher_user_id` in its `metadata.json`; the draft ephemeral is sent to that user
 - **All channel watcher skills checked** — every message is checked against all channel watcher skills (skill-level channel filter is M14)
 - **Shared utilities with M2** — common listener infrastructure and draft generation; separate handler file
 
@@ -22,7 +22,7 @@
 - `core/slack_bot.py` — `prepare_draft_order` (reused)
 - `common/progressive_disclosure/progressive_disclosure.py` — selects channel watcher skills
 - `common/slack/slack_api/slack_api.py` — exposes the slack_bolt client directly, plus helper functions as needed
-- `config/config.py` — list of watched channels, configured user ID
+- `config/config.py` — list of watched channels
 
 ### Skill Storage
 
@@ -32,9 +32,21 @@
     channel_watcher/
       support_escalation/
         SKILL.md          # freeform: "When a customer reports a P1 bug, draft an escalation..."
+        metadata.json     # { "watcher_user_id": "U123ABC" }
       unanswered_question/
         SKILL.md          # freeform: "When a question has been asked 2+ hours ago with no reply..."
+        metadata.json     # { "watcher_user_id": "U456DEF" }
 ```
+
+#### `metadata.json` (required per watcher skill)
+
+```json
+{
+  "watcher_user_id": "U123ABC"
+}
+```
+
+`watcher_user_id` — Slack user ID who receives the draft ephemeral when this skill matches. Each skill can target a different user.
 
 ### Config Example
 
@@ -66,10 +78,11 @@ channel_watcher_handler.py
        ├── if no skills matched → STOP (do nothing, ~90% of cases)
        │
        ├── slack_api.read_thread(channel_id, thread_ts)
+       ├── read metadata.json from each matched skill → watcher_user_id
        ├── prepare_draft_order(thread_messages, user_text="", matched_skills)
        │         ├── (includes RAG if available)
        │         ├── llm_client.generate(prompt)
-       │         └── slack_api.send_ephemeral(channel, thread_ts, configured_user, draft)
+       │         └── slack_api.send_ephemeral(channel, thread_ts, watcher_user_id, draft)
        └── done
 ```
 
@@ -86,7 +99,7 @@ channel_watcher_handler.py
 
 - **Precondition**: Watching #support. Channel watcher skill "support_escalation" exists. Customer posts a P1 bug report.
 - **Input**: `message` event in #support.
-- **Expected**: Progressive disclosure selects `support_escalation`. Thread fetched. Draft generated. Ephemeral sent to config owner.
+- **Expected**: Progressive disclosure selects `support_escalation`. Thread fetched. Draft generated. Ephemeral sent to skill's `watcher_user_id`.
 
 ### STP-4.2: No skill matches — nothing happens
 
@@ -128,7 +141,7 @@ channel_watcher_handler.py
 
 - **Precondition**: LLM unreachable during progressive disclosure.
 - **Input**: `message` event.
-- **Expected**: Fail fast — ephemeral error to config owner. Message skipped.
+- **Expected**: Fail fast — error logged. Message skipped.
 
 ### STP-4.9: No channel watcher skills exist
 
@@ -155,7 +168,7 @@ channel_watcher_handler.py
 - **test_non_watched_channel_ignored** — message in channel not in config, assert no progressive disclosure call
 - **test_uses_channel_watcher_skills** — assert `select_skills("channel_watcher", ...)` called (not "reply")
 - **test_thread_only_fetched_after_match** — assert `read_thread` NOT called before progressive disclosure, only after match
-- **test_ephemeral_sent_to_config_owner** — assert `send_ephemeral` uses configured user ID (not message author)
+- **test_ephemeral_sent_to_watcher_user** — assert `send_ephemeral` uses `watcher_user_id` from skill's `metadata.json`
 - **test_empty_skills_dir_no_action** — no channel watcher skills, assert no LLM call
 - **test_multiple_skills_combined** — mock 2 skills matching, assert both in prompt
 
@@ -173,6 +186,6 @@ channel_watcher_handler.py
 
 ### Test Cases
 
-- **test_message_to_ephemeral** — simulate message → skill match → thread fetch → draft → ephemeral to config owner
+- **test_message_to_ephemeral** — simulate message → skill match → thread fetch → draft → ephemeral to `watcher_user_id`
 - **test_message_no_match_silent** — simulate message → no match → verify no side effects
 - **test_listener_registration** — assert message listener registered for watched channels on startup

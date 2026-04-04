@@ -17,11 +17,6 @@ BLOCK_BODY_PREFIX = "dm_confirm_body_"
 BLOCK_ACTIONS = "dm_confirm_actions"
 
 
-def _owner_id() -> str | None:
-    oid = str(settings.slack_bot.get("config_owner_user_id") or "").strip()
-    return oid or None
-
-
 # ---------------------------------------------------------------------------
 # Parsing confirmation blocks back into message text
 # ---------------------------------------------------------------------------
@@ -133,27 +128,23 @@ def suggest_sending_dm(
     channel_id: str,
     thread_ts: str | None,
     target_label: str,
+    requester_user_id: str = "",
 ) -> str:
-    owner = _owner_id()
-    if not owner:
-        return "Error: slack_bot.config_owner_user_id is not set; cannot queue DM confirmation."
+    recipient = requester_user_id or ""
+    if not recipient:
+        return "Error: requester_user_id is required to send DM confirmation."
     try:
         blocks = _build_confirmation_blocks(target_label, message, target_user_id)
     except ValueError as e:
         return f"Error: {e}"
     slack_api.send_ephemeral_blocks(
-        channel_id, thread_ts, owner, "Confirm direct message", blocks
+        channel_id, thread_ts, recipient, "Confirm direct message", blocks
     )
     return "DM queued for confirmation"
 
 
 @log
 def handle_send_action(body: dict) -> str:
-    owner = _owner_id()
-    clicker = body.get("user", {}).get("id")
-    if owner and clicker and clicker != owner:
-        return "Only the configured owner can confirm this DM."
-
     target_user_id = (body.get("actions") or [{}])[0].get("value") or ""
     if not target_user_id:
         return "Missing recipient for this confirmation."

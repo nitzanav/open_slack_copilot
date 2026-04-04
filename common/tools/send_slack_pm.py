@@ -10,7 +10,7 @@ SEND_SLACK_PM_TOOL = {
         "name": "send_slack_pm",
         "description": (
             "Queue a direct message to a workspace member. "
-            "The config owner must confirm before anything is sent."
+            "The requesting user must confirm before anything is sent."
         ),
         "parameters": {
             "type": "object",
@@ -54,6 +54,7 @@ def handle_send_slack_pm_call(arguments_json: str) -> str:
         channel_id=inv["channel_id"],
         thread_ts=inv.get("thread_ts"),
         target_label=label,
+        requester_user_id=inv.get("user_id") or "",
     )
     if result.startswith("Error:"):
         return json.dumps({"error": result})

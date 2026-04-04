@@ -123,7 +123,7 @@ Returns: confirmation message with schedule details
 - **Sequential execution** — APScheduler configured with max_instances=1 and a single-threaded executor
 - **LLM judges** — no hardcoded rules for "action done"; the LLM reads the thread + reactions and decides
 - **Exponential backoff** — 1d → 2d → 4d → 8d → 16d → expires at 21d (3 weeks)
-- **DM confirmation** — reminder DMs go through M6's confirmation flow; config owner must approve each DM
+- **DM confirmation** — reminder DMs go through M6's confirmation flow; the requesting user must approve each DM
 
 ## STP — Software Test Procedure
 
@@ -137,7 +137,7 @@ Returns: confirmation message with schedule details
 
 - **Precondition**: Scheduled follow-up exists. Thread has 3 mentioned users. None have replied or reacted.
 - **Input**: APScheduler fires the job at 11am.
-- **Expected**: LLM reads thread, judges action not done. Composes DM for each non-completer. 3 DM confirmations sent to config owner. `backoff_days` updated from 1 to 2.
+- **Expected**: LLM reads thread, judges action not done. Composes DM for each non-completer. 3 DM confirmations sent to the scheduling user. `backoff_days` updated from 1 to 2.
 
 ### STP-7.3: Scheduled check — action DONE
 
@@ -185,7 +185,7 @@ Returns: confirmation message with schedule details
 
 - **Precondition**: The thread referenced in metadata no longer exists.
 - **Input**: Job fires.
-- **Expected**: `read_thread` returns error. Scheduled job removed (no point retrying). Ephemeral to config owner: "Thread no longer accessible, follow-up removed."
+- **Expected**: `read_thread` returns error. Scheduled job removed (no point retrying). Ephemeral to scheduling user: "Thread no longer accessible, follow-up removed."
 
 ## Unit Tests
 

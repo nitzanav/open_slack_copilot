@@ -8,7 +8,7 @@
 - **Enrich with thread context** — fetch full thread where the mention occurred
 - **Select reply skills** — use progressive disclosure to pick relevant reply skills; always draft (fallback to hardcoded default instruction from codebase if none match)
 - **Reuse M1 flow** — call `prepare_draft_order` with thread context, user text = empty (auto-draft), and selected reply skills
-- **Send ephemeral to user** — the configured user (single-user bot owner) receives the draft as ephemeral in the thread
+- **Send ephemeral to user** — the mentioned user receives the draft as ephemeral in the thread
 - **No rate limiting** — every mention triggers a draft (rate limiting is M13)
 - **Shared utilities with M4** — common listener infrastructure and draft generation; separate handler files
 

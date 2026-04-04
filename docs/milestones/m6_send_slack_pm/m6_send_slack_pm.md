@@ -36,7 +36,7 @@ send_slack_pm tool (does NOT send yet)
        ▼
 dm_confirmation.py
        │
-       ├── send ephemeral to config owner:
+       ├── send ephemeral to requesting user:
        │     "Draft DM to @Nitzan: 'Hey, please review the PR'"
        │     [Send] [Cancel]
        │
@@ -61,7 +61,7 @@ Returns: "DM queued for confirmation" (actual sending happens after user confirm
 ### Key Decisions
 
 - **Never auto-send** — all DMs require explicit user confirmation via Slack interactive buttons
-- **Ephemeral confirmation** — the DM preview is shown as ephemeral (only visible to config owner)
+- **Ephemeral confirmation** — the DM preview is shown as ephemeral (only visible to the requesting user)
 - **Interactive buttons** — requires Slack Block Kit with action handlers registered in `slack_listener.py`
 - **Tool returns immediately** — the LLM gets "DM queued for confirmation" and can continue generating the rest of the draft
 
@@ -71,7 +71,7 @@ Returns: "DM queued for confirmation" (actual sending happens after user confirm
 
 - **Precondition**: User "Dan" (U456) exists. Skill instructs LLM to send a follow-up DM.
 - **Input**: LLM calls `send_slack_pm(user="Dan", message="Please check the thread")`
-- **Expected**: Ephemeral to config owner: "Draft DM to @Dan: 'Please check the thread' [Send] [Cancel]". User clicks Send. DM sent to Dan.
+- **Expected**: Ephemeral to requesting user: "Draft DM to @Dan: 'Please check the thread' [Send] [Cancel]". User clicks Send. DM sent to Dan.
 
 ### STP-6.2: User cancels the DM
 
@@ -125,7 +125,7 @@ Returns: "DM queued for confirmation" (actual sending happens after user confirm
 
 - **test_tool_returns_pending** — call `send_slack_pm` tool, assert returns "DM queued for confirmation", NOT sent
 - **test_resolve_user_called** — assert `resolve_user` invoked with the user parameter
-- **test_confirmation_ephemeral_sent** — assert ephemeral with Block Kit buttons sent to config owner
+- **test_confirmation_ephemeral_sent** — assert ephemeral with Block Kit buttons sent to requesting user
 - **test_confirm_sends_dm** — simulate "Send" button action, assert `slack_api.send_dm` called with correct user_id and text
 - **test_cancel_no_dm** — simulate "Cancel" action, assert `send_dm` NOT called
 - **test_dm_failure_error_ephemeral** — mock `send_dm` raising error, assert error ephemeral sent

@@ -4,8 +4,6 @@
 slack_bot:
   token: "@format {env[SLACK_BOT_TOKEN]}"
   app_token: "@format {env[SLACK_APP_TOKEN]}"
-  # Slack user ID (U…) who receives DM-send confirmations (scheduled checks and draft flow).
-  config_owner_user_id: ""
   # For @mentions and the message shortcut on a channel-root post (no thread), use this many recent channel messages as context.
   copilot_channel_context_limit: 30
   # Prior agent log lines injected into compose_system_prompt (per thread).

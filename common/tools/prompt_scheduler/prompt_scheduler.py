@@ -11,7 +11,6 @@ from apscheduler.triggers.cron import CronTrigger
 from common.log import log
 from common.slack.slack_bot.draft_delivery import prepare_draft_and_send_ephemeral
 from common.tools.schedule_tool import SCHEDULE_PROMPT_TOOL, scheduled_prompts_root
-from config.config import settings
 
 _logger = logging.getLogger("open_slack_copilot")
 
@@ -141,11 +140,6 @@ def remove_job(job_id: str, delete_files: bool = True):
         shutil.rmtree(job_dir(job_id), ignore_errors=True)
 
 
-def _owner_id() -> str | None:
-    oid = str(settings.slack_bot.get("config_owner_user_id") or "").strip()
-    return oid or None
-
-
 @log
 def run_scheduled_prompt(job_id: str):
     root = job_dir(job_id)
@@ -171,13 +165,12 @@ def run_scheduled_prompt(job_id: str):
     thread_ts = meta["thread_ts"]
     user_id = meta.get("user_id") or ""
 
-    owner = _owner_id()
-    if not owner:
+    if not user_id:
         return
     prepare_draft_and_send_ephemeral(
         channel_id,
         thread_ts,
-        owner,
+        user_id,
         user_id,
         prompt_text,
         context_kind="thread",

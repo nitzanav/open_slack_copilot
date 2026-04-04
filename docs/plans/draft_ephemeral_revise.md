@@ -12,7 +12,7 @@
 | Context resolution | `resolve_copilot_slack_context` in same file | **Thread:** `thread_ts` + `fetch_thread_messages`. **Channel root (no thread):** anchor `ts` + `fetch_channel_tail_messages` (see `copilot_channel_context_limit`). |
 | Entry points | [`common/slack/slack_bot/slack_listener_with_threads.py`](../../common/slack/slack_bot/slack_listener_with_threads.py) | `/copilot`, shortcut `draft_with_copilot`, and **`app_mention`** → all call the same handler in [`core/slack_bot.py`](../../core/slack_bot.py) `_handle_copilot`, optionally with pre-resolved `thread_messages`. |
 | Draft delivery | [`core/slack_bot.py`](../../core/slack_bot.py) | `slack_api.send_ephemeral(..., text=draft)` — **no Block Kit, no Revise.** |
-| Scheduled prompts | [`common/tools/prompt_scheduler/prompt_scheduler.py`](../../common/tools/prompt_scheduler/prompt_scheduler.py) | `prepare_draft(..., tools=[SEND_SLACK_PM_TOOL])`, then `send_ephemeral` to **config owner** only. |
+| Scheduled prompts | [`common/tools/prompt_scheduler/prompt_scheduler.py`](../../common/tools/prompt_scheduler/prompt_scheduler.py) | `prepare_draft(..., tools=[SEND_SLACK_PM_TOOL])`, then `send_ephemeral` to the scheduling user. |
 | Interactive precedent | [`common/slack/slack_bot/dm_confirmation.py`](../../common/slack/slack_bot/dm_confirmation.py) | Chunked sections + `send_ephemeral_blocks` + `action_id` handlers. |
 
 ---
@@ -25,7 +25,7 @@
    - blank line  
    - full text of the draft shown in that ephemeral  
 3. On **submit**, run the same backend path as an instruction to `/copilot`: call `prepare_draft` with the modal text as `user_text`, and the **same Slack context** as the original draft (see below).
-4. Surfaces: **`/copilot`**, **shortcut**, **@mention**, and **scheduled** owner ephemerals.
+4. Surfaces: **`/copilot`**, **shortcut**, **@mention**, and **scheduled** ephemerals.
 
 ---
 
@@ -57,7 +57,7 @@ Do **not** put the full draft in the button `value` (Slack limit ~2000 chars). R
 ## Authorization
 
 - **Copilot** (slash / shortcut / mention): only the user who received the ephemeral may click Revise / submit (match `body["user"]["id"]` to ephemeral recipient).
-- **Scheduler:** ephemeral is sent to `config_owner_user_id`; only that user may act (same idea as [`dm_confirmation.handle_send_action`](../../common/slack/slack_bot/dm_confirmation.py)).
+- **Scheduler:** ephemeral is sent to the user who created the schedule; only that user may act.
 
 ---
 
