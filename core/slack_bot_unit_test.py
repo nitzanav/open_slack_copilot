@@ -194,11 +194,11 @@ class TestPrepareDraftPreloadedMessages:
 
 
 class TestHandleCopilot:
-    @patch("common.slack.copilot_pipeline.fetch_thread_messages")
+    @patch("common.slack.slack_bot.draft_delivery.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
-    @patch("core.slack_bot.send_draft_ephemeral_with_revise")
-    @patch("core.slack_bot.slack_api")
+    @patch("common.slack.slack_bot.draft_revise_actions.send_draft_ephemeral_with_revise")
+    @patch("common.slack.slack_bot.draft_delivery.slack_api")
     @patch("common.slack.copilot_pipeline.llm_client")
     def test_draft_sent_as_ephemeral(self, mock_llm, mock_slack, mock_send_rev, mock_pd, mock_rag, mock_fetch):
         mock_pd.select_skills.return_value = []
@@ -220,10 +220,10 @@ class TestHandleCopilot:
             context_kind="thread",
         )
 
-    @patch("common.slack.copilot_pipeline.fetch_thread_messages")
+    @patch("common.slack.slack_bot.draft_delivery.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
-    @patch("core.slack_bot.slack_api")
+    @patch("common.slack.slack_bot.draft_delivery.slack_api")
     @patch("common.slack.copilot_pipeline.llm_client")
     def test_llm_error_sends_error_ephemeral(self, mock_llm, mock_slack, mock_pd, mock_rag, mock_fetch):
         mock_pd.select_skills.return_value = []
@@ -236,12 +236,12 @@ class TestHandleCopilot:
         mock_fetch.return_value = THREAD_3
 
         _handle_copilot("C123", "T123", "U001", "")
-        assert "Failed to generate draft" in mock_slack.send_ephemeral.call_args[0][3]
+        assert "Failed to process" in mock_slack.send_ephemeral.call_args[0][3]
 
-    @patch("common.slack.copilot_pipeline.fetch_thread_messages")
+    @patch("common.slack.slack_bot.draft_delivery.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
-    @patch("core.slack_bot.slack_api")
+    @patch("common.slack.slack_bot.draft_delivery.slack_api")
     @patch("common.slack.copilot_pipeline.llm_client")
     def test_thread_fetch_error_sends_invite_ephemeral(
         self, mock_llm, mock_slack, mock_pd, mock_rag, mock_fetch,
@@ -251,3 +251,24 @@ class TestHandleCopilot:
         msg = mock_slack.send_ephemeral.call_args[0][3]
         assert "invite" in msg.lower()
         mock_llm.agent_tool_loop.assert_not_called()
+
+    @patch("common.slack.slack_bot.draft_delivery.fetch_thread_messages")
+    @patch("common.slack.copilot_pipeline.slack_rag")
+    @patch("common.slack.copilot_pipeline.progressive_disclosure")
+    @patch("common.slack.slack_bot.draft_revise_actions.send_draft_ephemeral_with_revise")
+    @patch("common.slack.copilot_pipeline.llm_client")
+    def test_empty_draft_sends_no_action_taken(
+        self, mock_llm, mock_send_rev, mock_pd, mock_rag, mock_fetch,
+    ):
+        mock_pd.select_skills.return_value = []
+        mock_pd.get_default_instruction.return_value = "default"
+        mock_rag.is_ready.return_value = True
+        mock_rag.query_channel.return_value = []
+        mock_rag.missing_channels.return_value = []
+        mock_rag.query_cross_channel.return_value = []
+        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult("", [])
+        mock_fetch.return_value = THREAD_3
+
+        _handle_copilot("C123", "T123", "U001", "help")
+        mock_send_rev.assert_called_once()
+        assert mock_send_rev.call_args[0][4] == "No action taken."

@@ -1,7 +1,6 @@
 from common.log import log
 from common.slack.copilot_pipeline import (
     DEFAULT_INSTRUCTION,
-    ThreadFetchError,
     compose_system_prompt,
     fetch_cross_channel_rag as _fetch_cross_channel_rag,
     get_checkpoint_seconds,
@@ -12,7 +11,7 @@ from common.slack.copilot_pipeline import (
 )
 from common.slack.slack_api import slack_api
 from common.slack.slack_bot import slack_listener, slack_listener_with_threads
-from common.slack.slack_bot.draft_revise_actions import send_draft_ephemeral_with_revise
+from common.slack.slack_bot.draft_delivery import prepare_draft_and_send_ephemeral
 from common.slack.slack_rag import slack_rag
 from common.tools.prompt_scheduler import reload_jobs_from_disk, shutdown_scheduler, start_scheduler
 from config.config import settings, parse_duration_seconds
@@ -57,36 +56,18 @@ def _handle_copilot(
     copilot_trigger: str | None = None,
     copilot_action: str | None = None,
 ):
-    try:
-        draft = prepare_draft(
-            channel_id,
-            thread_ts,
-            user_id,
-            user_text,
-            channel_name=channel_name,
-            thread_messages=thread_messages,
-            copilot_trigger=copilot_trigger,
-            copilot_action=copilot_action,
-        )
-        send_draft_ephemeral_with_revise(
-            channel_id,
-            thread_ts,
-            user_id,
-            user_id,
-            draft,
-            context_kind=context_kind,
-        )
-    except ThreadFetchError:
-        slack_api.send_ephemeral(
-            channel_id,
-            thread_ts,
-            user_id,
-            "Add me to this channel first. /invite @CoPilot",
-        )
-    except Exception:
-        slack_api.send_ephemeral(
-            channel_id, thread_ts, user_id, "Failed to generate draft, try again."
-        )
+    prepare_draft_and_send_ephemeral(
+        channel_id,
+        thread_ts,
+        user_id,
+        user_id,
+        user_text,
+        context_kind=context_kind,
+        channel_name=channel_name,
+        thread_messages=thread_messages,
+        copilot_trigger=copilot_trigger,
+        copilot_action=copilot_action,
+    )
 
 
 def _build_cross_channel_rags():

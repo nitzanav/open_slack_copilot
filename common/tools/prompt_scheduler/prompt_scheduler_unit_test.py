@@ -36,20 +36,19 @@ def _future_meta(**overrides) -> dict:
     return meta
 
 
-@patch("common.tools.prompt_scheduler.prompt_scheduler.prepare_draft")
-@patch("common.tools.prompt_scheduler.prompt_scheduler.slack_api")
-def test_run_calls_prepare_draft_with_prompt(mock_slack, mock_draft, tmp_path, monkeypatch):
+@patch("common.tools.prompt_scheduler.prompt_scheduler.prepare_draft_and_send_ephemeral")
+def test_run_calls_prepare_draft_with_prompt(mock_send, tmp_path, monkeypatch):
     monkeypatch.setattr(sched, "scheduled_prompts_root", lambda: tmp_path)
     prompt_text = "Remind everyone about the deadline."
     _write_job(tmp_path, "sched_ok", _future_meta(), prompt=prompt_text)
-    mock_draft.return_value = "Draft output"
+    monkeypatch.setattr(sched, "_owner_id", lambda: "UOWNER")
 
     sched.run_scheduled_prompt("sched_ok")
 
-    mock_draft.assert_called_once()
-    call_kw = mock_draft.call_args
-    assert call_kw[0] == ("C1", "T1", "U1")
-    assert call_kw[1]["user_text"] == prompt_text
+    mock_send.assert_called_once()
+    call_kw = mock_send.call_args
+    assert call_kw[0] == ("C1", "T1", "UOWNER", "U1", prompt_text)
+    assert call_kw[1]["context_kind"] == "thread"
     from common.tools.schedule_tool import SCHEDULE_PROMPT_TOOL
 
     assert call_kw[1]["excluded_tools"] == [SCHEDULE_PROMPT_TOOL]
@@ -69,25 +68,35 @@ def test_expiration_removes_job(mock_remove, tmp_path, monkeypatch):
     mock_remove.assert_called_once_with("sched_exp", delete_files=True)
 
 
-@patch("common.tools.prompt_scheduler.prompt_scheduler.prepare_draft")
+@patch("common.slack.slack_bot.draft_delivery.fetch_thread_messages")
 @patch("common.tools.prompt_scheduler.prompt_scheduler.remove_job")
-@patch("common.tools.prompt_scheduler.prompt_scheduler.slack_api")
-def test_thread_inaccessible_removes_job(mock_slack, mock_remove, mock_draft, tmp_path, monkeypatch):
+@patch("common.slack.slack_bot.draft_delivery.slack_api")
+def test_thread_inaccessible_sends_invite_does_not_remove_job(
+    mock_slack, mock_remove, mock_fetch, tmp_path, monkeypatch,
+):
     monkeypatch.setattr(sched, "scheduled_prompts_root", lambda: tmp_path)
     _write_job(tmp_path, "sched_bad", _future_meta())
     from common.slack.copilot_pipeline import ThreadFetchError
-    mock_draft.side_effect = ThreadFetchError("gone")
+    from common.slack.slack_bot.draft_delivery import CHANNEL_INVITE_EPHEMERAL
+
+    mock_fetch.side_effect = ThreadFetchError("gone")
+    monkeypatch.setattr(sched, "_owner_id", lambda: "UOWNER")
 
     sched.run_scheduled_prompt("sched_bad")
 
-    mock_remove.assert_called_once()
+    mock_remove.assert_not_called()
+    mock_slack.send_ephemeral.assert_called_once_with(
+        "C1", "T1", "UOWNER", CHANNEL_INVITE_EPHEMERAL,
+    )
 
 
-@patch("common.tools.prompt_scheduler.prompt_scheduler.prepare_draft")
-@patch("common.tools.prompt_scheduler.prompt_scheduler.send_draft_ephemeral_with_revise")
-def test_result_sent_to_owner(mock_send_rev, mock_draft, tmp_path, monkeypatch):
+@patch("common.slack.slack_bot.draft_delivery.fetch_thread_messages")
+@patch("common.slack.slack_bot.draft_delivery.prepare_draft")
+@patch("common.slack.slack_bot.draft_revise_actions.send_draft_ephemeral_with_revise")
+def test_result_sent_to_owner(mock_send_rev, mock_draft, mock_fetch, tmp_path, monkeypatch):
     monkeypatch.setattr(sched, "scheduled_prompts_root", lambda: tmp_path)
     _write_job(tmp_path, "sched_owner", _future_meta())
+    mock_fetch.return_value = []
     mock_draft.return_value = "Here is the draft"
     monkeypatch.setattr(sched, "_owner_id", lambda: "UOWNER")
 

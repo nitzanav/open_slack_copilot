@@ -76,7 +76,9 @@ class TestMessageShortcutEndToEnd:
 
         shortcut = _shortcut_payload(channel_id="C1", user_id="U1")
 
-        with patch("core.slack_bot.send_draft_ephemeral_with_revise") as mock_rev:
+        with patch(
+            "common.slack.slack_bot.draft_revise_actions.send_draft_ephemeral_with_revise",
+        ) as mock_rev:
             registered_fn(ack=MagicMock(), shortcut=shortcut, client=MagicMock())
 
             mock_fetch.assert_called_once_with("C1", "1516229200.000000")
@@ -115,7 +117,9 @@ class TestMessageShortcutEndToEnd:
 
         shortcut = _shortcut_payload(thread_ts=None)
 
-        with patch("core.slack_bot.send_draft_ephemeral_with_revise") as mock_rev:
+        with patch(
+            "common.slack.slack_bot.draft_revise_actions.send_draft_ephemeral_with_revise",
+        ) as mock_rev:
             registered_fn(ack=MagicMock(), shortcut=shortcut, client=MagicMock())
 
             mock_tail.assert_called_once_with("C1")

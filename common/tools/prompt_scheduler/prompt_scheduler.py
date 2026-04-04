@@ -9,9 +9,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from common.log import log
-from common.slack.copilot_pipeline import ThreadFetchError, prepare_draft
-from common.slack.slack_api import slack_api
-from common.slack.slack_bot.draft_revise_actions import send_draft_ephemeral_with_revise
+from common.slack.slack_bot.draft_delivery import prepare_draft_and_send_ephemeral
 from common.tools.schedule_tool import SCHEDULE_PROMPT_TOOL, scheduled_prompts_root
 from config.config import settings
 
@@ -173,38 +171,17 @@ def run_scheduled_prompt(job_id: str):
     thread_ts = meta["thread_ts"]
     user_id = meta.get("user_id") or ""
 
-    try:
-        result = prepare_draft(
-            channel_id,
-            thread_ts,
-            user_id,
-            user_text=prompt_text,
-            excluded_tools=[SCHEDULE_PROMPT_TOOL],
-            copilot_trigger="scheduled_prompt",
-            copilot_action="activated_scheduled_prompt",
-        )
-    except ThreadFetchError:
-        remove_job(job_id, delete_files=True)
-        owner = _owner_id()
-        if owner:
-            slack_api.send_ephemeral(
-                channel_id,
-                thread_ts,
-                owner,
-                "Scheduled prompt removed: thread is no longer accessible.",
-            )
-        return
-    except Exception as exc:
-        _logger.error("Scheduled prompt %s error: %s", job_id, exc)
-        return
-
     owner = _owner_id()
-    if owner and result:
-        send_draft_ephemeral_with_revise(
-            channel_id,
-            thread_ts,
-            owner,
-            user_id,
-            result,
-            context_kind="thread",
-        )
+    if not owner:
+        return
+    prepare_draft_and_send_ephemeral(
+        channel_id,
+        thread_ts,
+        owner,
+        user_id,
+        prompt_text,
+        context_kind="thread",
+        excluded_tools=[SCHEDULE_PROMPT_TOOL],
+        copilot_trigger="scheduled_prompt",
+        copilot_action="activated_scheduled_prompt",
+    )

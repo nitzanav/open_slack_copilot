@@ -8,13 +8,11 @@ from typing import Any
 from slack_bolt import App
 
 from common.log import log
-from common.slack.copilot_pipeline import (
-    ThreadFetchError,
-    fetch_channel_tail_messages,
-    fetch_thread_messages,
-    prepare_draft,
-)
 from common.slack.slack_api import slack_api
+from common.slack.slack_bot.draft_delivery import (
+    DraftReviseError,
+    prepare_draft_and_send_ephemeral,
+)
 
 from config.config import settings
 
@@ -33,10 +31,6 @@ BLOCK_INCLUDE_DRAFT = "revise_include_draft"
 ACTION_INCLUDE_DRAFT = "include_draft_checkbox"
 
 _PRIVATE_METADATA_LIMIT = _SLACK_BOT_CONFIG.get("private_metadata_limit", 3000)
-
-
-class DraftReviseError(Exception):
-    """User-visible Revise flow error."""
 
 
 def _chunk_plain(message: str) -> list[str]:
@@ -199,17 +193,6 @@ def send_draft_ephemeral_with_revise(
     )
 
 
-def _resolve_thread_messages(meta: dict[str, Any]) -> list[dict]:
-    channel_id = meta.get("channel_id") or ""
-    anchor_ts = meta.get("anchor_ts") or ""
-    kind = meta.get("context_kind") or "thread"
-    if kind == "channel_tail":
-        return fetch_channel_tail_messages(channel_id)
-    if not anchor_ts:
-        raise DraftReviseError("Missing thread anchor for revise.")
-    return fetch_thread_messages(channel_id, anchor_ts)
-
-
 def _build_private_metadata(metadata_json: str, draft: str) -> str:
     meta = json.loads(metadata_json)
     meta["draft"] = draft
@@ -366,53 +349,14 @@ def register_draft_revise_handlers(app: App) -> None:
         prepare_uid = meta.get("prepare_user_id") or ""
         channel_name = slack_api.get_channel_prefixed_name(channel_id)
 
-        try:
-            thread_messages = _resolve_thread_messages(meta)
-        except ThreadFetchError:
-            slack_api.send_ephemeral(
-                channel_id,
-                anchor_ts,
-                user_id,
-                "Add me to this channel first. /invite @CoPilot",
-            )
-            return
-        except DraftReviseError as e:
-            slack_api.send_ephemeral(channel_id, anchor_ts, user_id, str(e))
-            return
-
-        try:
-            new_draft = prepare_draft(
-                channel_id,
-                anchor_ts or "",
-                prepare_uid,
-                user_text,
-                channel_name=channel_name,
-                thread_messages=thread_messages,
-                copilot_trigger="message_shortcut_revise",
-                copilot_action="suggested_draft",
-            )
-        except ThreadFetchError:
-            slack_api.send_ephemeral(
-                channel_id,
-                anchor_ts,
-                user_id,
-                "Add me to this channel first. /invite @CoPilot",
-            )
-            return
-        except Exception:
-            slack_api.send_ephemeral(
-                channel_id,
-                anchor_ts,
-                user_id,
-                "Failed to generate draft, try again.",
-            )
-            return
-
-        send_draft_ephemeral_with_revise(
+        prepare_draft_and_send_ephemeral(
             channel_id,
-            anchor_ts,
+            anchor_ts or "",
             user_id,
             prepare_uid,
-            new_draft,
+            user_text,
             context_kind=str(meta.get("context_kind") or "thread"),
+            channel_name=channel_name,
+            copilot_trigger="message_shortcut_revise",
+            copilot_action="suggested_draft",
         )

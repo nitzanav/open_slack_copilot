@@ -32,7 +32,7 @@ def _mock_bot_deps(mock_llm, mock_pd, mock_rag):
 
 class TestSlashCommandEndToEnd:
 
-    @patch("common.slack.copilot_pipeline.fetch_thread_messages")
+    @patch("common.slack.slack_bot.draft_delivery.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
     @patch("common.slack.copilot_pipeline.llm_client")
@@ -51,7 +51,9 @@ class TestSlashCommandEndToEnd:
 
         command = {"channel_id": "C1", "user_id": "U1", "text": "reply politely", "thread_ts": "T1"}
 
-        with patch("core.slack_bot.send_draft_ephemeral_with_revise") as mock_rev:
+        with patch(
+            "common.slack.slack_bot.draft_revise_actions.send_draft_ephemeral_with_revise",
+        ) as mock_rev:
             registered_fn(ack=MagicMock(), command=command)
 
             mock_llm.agent_tool_loop.assert_called_once()
@@ -69,7 +71,7 @@ class TestSlashCommandEndToEnd:
                 context_kind="thread",
             )
 
-    @patch("common.slack.copilot_pipeline.fetch_thread_messages")
+    @patch("common.slack.slack_bot.draft_delivery.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
     @patch("common.slack.copilot_pipeline.llm_client")
@@ -88,7 +90,9 @@ class TestSlashCommandEndToEnd:
 
         command = {"channel_id": "C2", "user_id": "U2", "text": "", "thread_ts": "T2"}
 
-        with patch("core.slack_bot.send_draft_ephemeral_with_revise") as mock_rev:
+        with patch(
+            "common.slack.slack_bot.draft_revise_actions.send_draft_ephemeral_with_revise",
+        ) as mock_rev:
             registered_fn(ack=MagicMock(), command=command)
             mock_rev.assert_called_once_with(
                 "C2",
