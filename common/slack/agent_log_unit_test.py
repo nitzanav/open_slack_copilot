@@ -62,15 +62,55 @@ def test_format_agent_log_section_compact():
 
 @patch.object(agent_log.llm_client, "generate", return_value="Suggested consulting IT first")
 def test_summarize_uses_llm(mock_gen):
+    long_draft = "Try IT. " * 20  # >= 100 chars so summarizer LLM is used
     out = agent_log.summarize_copilot_run(
         trigger="message_shortcut",
         action="suggested_draft",
         user_text="help",
-        final_text="Try IT",
+        final_text=long_draft,
         tool_trace=[],
     )
     assert "consulting" in out.lower()
     mock_gen.assert_called_once()
+
+
+@patch.object(agent_log.llm_client, "generate")
+def test_summarize_short_final_skips_llm(mock_gen):
+    out = agent_log.summarize_copilot_run(
+        trigger="app_mention",
+        action="suggested_draft",
+        user_text="hi",
+        final_text="Short reply here.",
+        tool_trace=[],
+    )
+    assert out == "Short reply here."
+    mock_gen.assert_not_called()
+
+
+def test_tool_trace_for_record():
+    rows = agent_log.tool_trace_for_record(
+        [
+            ToolCallRecord("schedule_prompt", '{"status":"scheduled"}'),
+        ]
+    )
+    assert rows == [{"name": "schedule_prompt", "result_preview": '{"status":"scheduled"}'}]
+
+
+def test_format_agent_log_section_includes_tool_names():
+    text = agent_log.format_agent_log_section(
+        [
+            {
+                "timestamp": "2026-03-14T16:26:00+00:00",
+                "trigger": "app_mention",
+                "action": "suggested_draft",
+                "summary": "Scheduled hourly follow-up.",
+                "tools": [
+                    {"name": "schedule_prompt", "result_preview": '{"status":"scheduled"}'}
+                ],
+            }
+        ]
+    )
+    assert "| tools: schedule_prompt" in text
 
 
 def test_summarize_fallback_schedule_tool():

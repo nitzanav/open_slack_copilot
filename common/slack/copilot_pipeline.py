@@ -144,14 +144,18 @@ def prepare_draft(
             final_text=draft,
             tool_trace=loop_result.tool_trace,
         )
-        agent_log.append_entry({
+        entry: dict = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "channel": channel_id,
             "thread_ts": thread_ts,
             "trigger": copilot_trigger,
             "action": copilot_action,
             "summary": summary,
-        })
+        }
+        tools = agent_log.tool_trace_for_record(loop_result.tool_trace)
+        if tools:
+            entry["tools"] = tools
+        agent_log.append_entry(entry)
     return draft
 
 

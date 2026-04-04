@@ -16,6 +16,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 AGENT_LOGS_DIR = _REPO_ROOT / "agent_logs"
 GLOBAL_LOG = AGENT_LOGS_DIR / "llm_actions.log"
 _MAX_TOOL_SNIPPET = 600
+_MAX_TOOL_PREVIEW_IN_LOG = 400
+_SHORT_FINAL_SKIP_SUMMARY_LLM_CHARS = 100
 _WRITE_LOCK = threading.Lock()
 
 
@@ -51,6 +53,19 @@ def _bracket_utc(ts_iso: str) -> str:
         return "unknown time"
 
 
+def _tool_names_from_record(entry: dict) -> list[str]:
+    tools = entry.get("tools")
+    if not isinstance(tools, list):
+        return []
+    names: list[str] = []
+    for t in tools:
+        if isinstance(t, dict):
+            n = str(t.get("name", "")).strip()
+            if n:
+                names.append(n)
+    return names
+
+
 def format_agent_log_section(entries: list[dict]) -> str:
     """Build ## Agent log subsection for the system prompt (compact, no channel/thread per line)."""
     if not entries:
@@ -61,7 +76,11 @@ def format_agent_log_section(entries: list[dict]) -> str:
         trig = _display_enum(str(e.get("trigger", "")))
         act = _display_enum(str(e.get("action", "")))
         summ = str(e.get("summary", "")).strip()
-        lines.append(f"[{ts}] {trig} - {act}: {summ}")
+        row = f"[{ts}] {trig} - {act}: {summ}"
+        tnames = _tool_names_from_record(e)
+        if tnames:
+            row += f" | tools: {', '.join(tnames)}"
+        lines.append(row)
     return "\n".join(lines) + "\n"
 
 
@@ -112,6 +131,21 @@ def _truncate(s: str, max_len: int) -> str:
     return s[: max_len - 3] + "..."
 
 
+def tool_trace_for_record(trace: list[Any]) -> list[dict[str, str]]:
+    """JSON-serializable tool rows for NDJSON (name + truncated result preview)."""
+    out: list[dict[str, str]] = []
+    for item in trace:
+        name = getattr(item, "name", "") or ""
+        prev = getattr(item, "result_preview", "") or ""
+        if not name and not prev:
+            continue
+        out.append({
+            "name": name,
+            "result_preview": _truncate(prev, _MAX_TOOL_PREVIEW_IN_LOG),
+        })
+    return out
+
+
 def _tool_trace_lines(trace: list[Any]) -> str:
     if not trace:
         return "(none)"
@@ -149,6 +183,13 @@ def _word_count(s: str) -> int:
     return len([w for w in _SUMMARY_WORDS_RE.split(s.strip()) if w])
 
 
+def _clamp_summary_words(s: str, max_words: int = 20) -> str:
+    words = [w for w in _SUMMARY_WORDS_RE.split((s or "").strip()) if w]
+    if len(words) <= max_words:
+        return " ".join(words)
+    return " ".join(words[:max_words])
+
+
 def summarize_copilot_run(
     *,
     trigger: str,
@@ -157,6 +198,10 @@ def summarize_copilot_run(
     final_text: str,
     tool_trace: list[Any],
 ) -> str:
+    ft = (final_text or "").strip()
+    if ft and len(ft) < _SHORT_FINAL_SKIP_SUMMARY_LLM_CHARS:
+        return _clamp_summary_words(ft, 20)
+
     system = (
         "You write an extremely brief log line for a Slack copilot run. "
         "Output ONLY plain text: 2 to 20 words, no quotes, no JSON. "
@@ -168,7 +213,7 @@ def summarize_copilot_run(
         f"trigger: {trigger}\n"
         f"action: {action}\n"
         f"user_instruction:\n{_truncate(user_text, 2000)}\n\n"
-        f"final_assistant_text:\n{_truncate(final_text, 2000)}\n\n"
+        f"final_assistant_text:\n{_truncate(ft, 2000)}\n\n"
         f"tool_calls (name and result snippets):\n{_tool_trace_lines(tool_trace)}"
     )
     try:
