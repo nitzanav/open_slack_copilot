@@ -14,7 +14,7 @@ Two contexts — follow the matching path.
 
 ### A. First invocation (user asks to follow up)
 
-1. **Infer check frequency or exact date** - daily, hourly or exact date. Default: daily.
+1. **Infer check frequency or exact date** - daily, hourly or exact date. Default: daily. Keep it daily unless clearly said otherwise.
 2. **Resolve target users** — For **named people**, read **`<@U…>`** from thread message text (Slack stores mentions that way) and use the **Users** roster in context for id ↔ name. For **user groups**, call `list_usergroup_members` (S… id, `<!subteam^S…>` in the message, or handle).
 3. **Completion criteria** (pick from context):
    - **Emoji reaction** — e.g. ✅ (`:white_check_mark:`). Reactions and the users who set them are already included in the thread context.
