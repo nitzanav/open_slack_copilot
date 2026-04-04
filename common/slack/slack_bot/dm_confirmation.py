@@ -8,8 +8,9 @@ from common.log import log
 from common.slack.slack_api import slack_api
 from config.config import settings
 
-_PLAIN_CHUNK = 3000  # Slack plain_text section max
-_MAX_BODY_BLOCKS = 48  # header + actions + body <= 50
+_SLACK_BOT_CONFIG = settings.slack_bot
+_PLAIN_CHUNK = _SLACK_BOT_CONFIG.get("block_kit_plain_text_chunk", 3000)  # Slack plain_text section max
+_MAX_BODY_BLOCKS = _SLACK_BOT_CONFIG.get("block_kit_max_body_blocks", 48)  # header + actions + body <= 50
 
 BLOCK_HEADER = "dm_confirm_header"
 BLOCK_BODY_PREFIX = "dm_confirm_body_"

@@ -16,8 +16,11 @@ from common.slack.copilot_pipeline import (
 )
 from common.slack.slack_api import slack_api
 
-_PLAIN_CHUNK = 3000
-_MAX_BODY_BLOCKS = 48
+from config.config import settings
+
+_SLACK_BOT_CONFIG = settings.slack_bot
+_PLAIN_CHUNK = _SLACK_BOT_CONFIG.get("block_kit_plain_text_chunk", 3000)
+_MAX_BODY_BLOCKS = _SLACK_BOT_CONFIG.get("block_kit_max_body_blocks", 48)
 
 BLOCK_HEADER = "draft_rev_header"
 BLOCK_BODY_PREFIX = "draft_body_"
@@ -29,7 +32,7 @@ ACTION_REVISE_TEXT = "revise_text"
 BLOCK_INCLUDE_DRAFT = "revise_include_draft"
 ACTION_INCLUDE_DRAFT = "include_draft_checkbox"
 
-_PRIVATE_METADATA_LIMIT = 3000
+_PRIVATE_METADATA_LIMIT = _SLACK_BOT_CONFIG.get("private_metadata_limit", 3000)
 
 
 class DraftReviseError(Exception):
@@ -69,7 +72,7 @@ def parse_draft_from_revise_blocks(blocks: list[dict]) -> str:
     return combined
 
 
-_BUTTON_VALUE_LIMIT = 2000
+_BUTTON_VALUE_LIMIT = _SLACK_BOT_CONFIG.get("button_value_limit", 2000)
 
 
 def _build_metadata_value(

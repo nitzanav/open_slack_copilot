@@ -13,11 +13,12 @@ from common.llm.llm_client import llm_client
 from config.config import settings
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-AGENT_LOGS_DIR = _REPO_ROOT / "agent_logs"
-GLOBAL_LOG = AGENT_LOGS_DIR / "llm_actions.log"
-_MAX_TOOL_SNIPPET = 600
-_MAX_TOOL_PREVIEW_IN_LOG = 400
-_SHORT_FINAL_SKIP_SUMMARY_LLM_CHARS = 100
+AGENT_LOG_CONFIG = settings.agent_log
+AGENT_LOGS_DIR = _REPO_ROOT / AGENT_LOG_CONFIG.get("agent_logs_dir", "agent_logs")
+GLOBAL_LOG = AGENT_LOGS_DIR / AGENT_LOG_CONFIG.get("global_log_filename", "llm_actions.log")
+_MAX_TOOL_SNIPPET = AGENT_LOG_CONFIG.get("max_tool_snippet", 600)
+_MAX_TOOL_PREVIEW_IN_LOG = AGENT_LOG_CONFIG.get("max_tool_preview_in_log", 400)
+_SHORT_FINAL_SKIP_SUMMARY_LLM_CHARS = AGENT_LOG_CONFIG.get("short_final_skip_summary_llm_chars", 100)
 _WRITE_LOCK = threading.Lock()
 
 

@@ -7,10 +7,12 @@ from pathlib import Path
 from fastembed import TextEmbedding
 
 from common.log import log
+from config.config import settings
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
 
-EMBEDDING_DIM = 384
+_RAG_CONFIG = settings.rag
+EMBEDDING_DIM = _RAG_CONFIG.get("embedding_dim", 384)
 _client: QdrantClient | None = None
 _embedder: TextEmbedding | None = None
 _locks: dict[str, threading.Lock] = {}

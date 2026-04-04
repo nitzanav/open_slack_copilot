@@ -10,16 +10,41 @@ slack_bot:
   copilot_channel_context_limit: 30
   # Prior agent log lines injected into compose_system_prompt (per thread).
   llm_action_history_limit: 10
+  block_kit_plain_text_chunk: 3000
+  block_kit_max_body_blocks: 48
+  private_metadata_limit: 3000
+  button_value_limit: 2000
 
 scheduled_prompts:
   storage_path: "~/.open_slack_copilot/scheduled_prompts"
+  max_expiry_days: 14
+  default_expiry_days: 7
 
 llm:
   model: "gpt-4o"
   openai_api_key: "@format {env[OPENAI_API_KEY]}"
+  max_tool_rounds: 24
+  max_tool_result_preview: 600
+
+log_sanitize:
+  max_str: 500
+  max_list: 8
+  max_depth: 12
+
+cache:
+  filename_max: 200
+  value_segment_max: 120
+
+agent_log:
+  agent_logs_dir: "agent_logs"
+  global_log_filename: "llm_actions.log"
+  max_tool_snippet: 600
+  max_tool_preview_in_log: 400
+  short_final_skip_summary_llm_chars: 100
 
 rag:
   checkpoint_duration: "30d"
   storage_path: ".rag_storage"
   cross_channel: []
   slack: []
+  embedding_dim: 384

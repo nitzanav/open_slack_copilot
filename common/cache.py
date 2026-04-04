@@ -9,14 +9,17 @@ from functools import wraps
 from pathlib import Path
 from typing import Any, TypeVar
 
+from config.config import settings
+
 DEFAULT_TTL_SECONDS = 7 * 24 * 3600
 
 DEFAULT_CACHE_DIR = Path(__file__).resolve().parent.parent / ".cache"
 
 T = TypeVar("T")
 
-_FILENAME_MAX = 200
-_VALUE_SEGMENT_MAX = 120
+_CACHE_CONFIG = settings.cache
+_FILENAME_MAX = _CACHE_CONFIG.get("filename_max", 200)
+_VALUE_SEGMENT_MAX = _CACHE_CONFIG.get("value_segment_max", 120)
 _BAD_PATH_CHARS = re.compile(r'[/\\:*?"<>|\n\r\x00]')
 
 

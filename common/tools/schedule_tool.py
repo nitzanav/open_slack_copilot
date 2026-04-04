@@ -7,8 +7,9 @@ from common.log import log
 from common.tools.draft_context import get_invocation
 from config.config import settings
 
-_MAX_EXPIRY_DAYS = 14
-_DEFAULT_EXPIRY_DAYS = 7
+_SCHEDULED_PROMPTS_CONFIG = settings.scheduled_prompts
+_MAX_EXPIRY_DAYS = _SCHEDULED_PROMPTS_CONFIG.get("max_expiry_days", 14)
+_DEFAULT_EXPIRY_DAYS = _SCHEDULED_PROMPTS_CONFIG.get("default_expiry_days", 7)
 
 SCHEDULE_PROMPT_TOOL = {
     "type": "function",

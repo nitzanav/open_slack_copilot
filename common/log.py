@@ -3,6 +3,8 @@ import json
 import logging
 from typing import Any
 
+from config.config import settings
+
 _logger = logging.getLogger("open_slack_copilot")
 if not _logger.handlers:
     _logger.setLevel(logging.INFO)
@@ -21,9 +23,10 @@ _REDACT_KEYS = frozenset(
     }
 )
 
-_DEFAULT_MAX_STR = 500
-_DEFAULT_MAX_LIST = 8
-_DEFAULT_MAX_DEPTH = 12
+_LOG_SANITIZE_CONFIG = settings.log_sanitize
+_DEFAULT_MAX_STR = _LOG_SANITIZE_CONFIG.get("max_str", 500)
+_DEFAULT_MAX_LIST = _LOG_SANITIZE_CONFIG.get("max_list", 8)
+_DEFAULT_MAX_DEPTH = _LOG_SANITIZE_CONFIG.get("max_depth", 12)
 
 
 def _to_json(obj: Any) -> str:

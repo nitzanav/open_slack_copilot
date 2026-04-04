@@ -8,8 +8,9 @@ import litellm
 from common.log import log
 from config.config import settings
 
-_MAX_TOOL_ROUNDS = 24
-_MAX_TOOL_RESULT_PREVIEW = 600
+_LLM_CONFIG = settings.llm
+_MAX_TOOL_ROUNDS = _LLM_CONFIG.get("max_tool_rounds", 24)
+_MAX_TOOL_RESULT_PREVIEW = _LLM_CONFIG.get("max_tool_result_preview", 600)
 
 
 @dataclass
