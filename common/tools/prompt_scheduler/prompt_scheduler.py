@@ -79,6 +79,60 @@ def reload_jobs_from_disk():
             register_job_from_disk(d.name)
 
 
+def _print_scheduled_job_disk_files(job_id: str) -> None:
+    """Print metadata.json and prompt.txt for one job directory."""
+    root = job_dir(job_id)
+    meta_path = root / "metadata.json"
+    prompt_path = root / "prompt.txt"
+    if not root.is_dir():
+        print(f"  (missing directory: {root})")
+        return
+    if meta_path.is_file():
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            print("  metadata.json:")
+            print(json.dumps(meta, indent=2))
+        except (json.JSONDecodeError, OSError) as exc:
+            print(f"  metadata.json: (error reading: {exc})")
+    else:
+        print("  metadata.json: (missing)")
+    if prompt_path.is_file():
+        try:
+            body = prompt_path.read_text(encoding="utf-8").rstrip("\n")
+            print("  prompt.txt:")
+            if body:
+                for line in body.splitlines():
+                    print(f"    {line}")
+            else:
+                print("    (empty)")
+        except OSError as exc:
+            print(f"  prompt.txt: (error reading: {exc})")
+    else:
+        print("  prompt.txt: (missing)")
+    print()
+
+
+def print_scheduled_prompt_jobs() -> None:
+    """Load prompt jobs from disk, print each APScheduler job, then stop the scheduler.
+
+    For CLI use (e.g. ``make schedules-list``): avoids leaving a running
+    ``BackgroundScheduler`` thread so the process can exit.
+    """
+    try:
+        reload_jobs_from_disk()
+        s = _ensure_scheduler()
+        jobs = s.get_jobs()
+        if not jobs:
+            print("(no scheduled prompt jobs)")
+            return
+        for job in jobs:
+            # id matches directory name under scheduled_prompts_root; str(job) is trigger + next run
+            print(f"{job.id}: {job}")
+            _print_scheduled_job_disk_files(job.id)
+    finally:
+        shutdown_scheduler()
+
+
 def remove_job(job_id: str, delete_files: bool = True):
     s = _ensure_scheduler()
     try:

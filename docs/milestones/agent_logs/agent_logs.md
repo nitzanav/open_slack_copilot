@@ -82,12 +82,21 @@ One JSON object per line:
 | `thread_ts` | string | Thread anchor |
 | `trigger` | string | See §1.4 |
 | `action` | string | See §1.5 |
-| `summary` | string | 2–20 words, plain text |
+| `summary` | string | 2–20 words, plain text (or clamped draft text; see §1.3a) |
+| `tools` | array (optional) | When any tools ran: `[{"name":"schedule_prompt","result_preview":"…"}]` (preview truncated for storage) |
+
+**§1.3a Short final text (no summary LLM):** If `prepare_draft`’s final assistant text is **non-empty and under 100 characters**, the implementation **does not** call the summarizer LLM; `summary` is that text trimmed and clamped to **20 words**. Empty final text still uses the summarizer LLM or heuristics.
 
 Example:
 
 ```json
 {"timestamp":"2026-04-03T12:00:00+00:00","channel":"C0123","thread_ts":"1234.5678","trigger":"scheduled_prompt","action":"activated_scheduled_prompt","summary":"Reminded Dan and John to confirm deploy"}
+```
+
+With tools:
+
+```json
+{"timestamp":"2026-04-03T12:00:00+00:00","channel":"C0123","thread_ts":"1234.5678","trigger":"app_mention","action":"suggested_draft","summary":"Scheduled hourly check.","tools":[{"name":"schedule_prompt","result_preview":"{\"status\":\"scheduled\"}"}]}
 ```
 
 ### 1.8 Agent log (prompt injection — compact format)
@@ -105,10 +114,11 @@ When `prepare_draft` is called with activation metadata (`copilot_trigger` + `co
 
 [2026-03-14 16:26] message shortcut revise - suggested draft: wrote shorter draft
 [2026-03-14 09:00] scheduled prompt - activated scheduled prompt: reminded Dan and John
+[2026-03-14 10:00] app mention - suggested draft: Scheduled hourly check. | tools: schedule_prompt
 ```
 
 - **Heading:** `## Agent log` (singular).
-- **Each line:** `[YYYY-MM-DD HH:MM]` (UTC, derived from the record `timestamp`) **then** `<trigger> - <action>: <summary>`.
+- **Each line:** `[YYYY-MM-DD HH:MM]` (UTC, derived from the record `timestamp`) **then** `<trigger> - <action>: <summary>`. If the record has **`tools`**, append **` | tools: name1, name2`** (tool function names only, comma-separated).
 - **Trigger and action** in this block are the same enum strings as in NDJSON, but **rendered for reading**: replace `_` with a space (e.g. `message_shortcut_revise` → `message shortcut revise`, `suggested_draft` → `suggested draft`, `activated_scheduled_prompt` → `activated scheduled prompt`).
 - **Summary:** verbatim from the record (already plain language).
 
@@ -210,8 +220,13 @@ def compose_system_prompt(
 ### 2.7 Summarization (`summarize_copilot_run`)
 
 - Input: `trigger`, `action`, trimmed `user_text`, `final_text` (may be empty), `tool_trace` (may be empty).
-- Call `llm_client.generate(system=..., user=...)` with instructions: output **2–20 words**, plain English, describe the **main outcome** (prefer tool outcomes when they are the substantive result).
+- If **`final_text` stripped length is in `[1, 99]`**: return it clamped to **20 words** — **no** `generate` call.
+- Else: call `llm_client.generate(system=..., user=...)` with instructions: output **2–20 words**, plain English, describe the **main outcome** (prefer tool outcomes when they are the substantive result).
 - On failure or empty model output: fallback string from heuristics (keywords from tool names / `user_text`) or `"Copilot run completed"`.
+
+### 2.7a NDJSON `tools` field
+
+- After a successful run, `prepare_draft` passes `tool_trace_for_record(tool_trace)` into `append_entry` when non-empty so each line records **which tools ran** and a **truncated `result_preview`** per tool.
 
 ### 2.8 Sequence (happy path)
 

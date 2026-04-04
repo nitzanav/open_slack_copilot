@@ -1,7 +1,8 @@
 .PHONY: install run test docker-build docker-run \
 	rag-inspect-all-channels rag-inspect-channel rag-inspect-all \
 	rag-inspect-collection rag-list-collections rag-help \
-	rag-clean rag-clean-dry-run
+	rag-clean rag-clean-dry-run \
+	schedules-list
 
 PYTHON ?= python3
 PY := .venv/bin/python
@@ -85,3 +86,8 @@ rag-clean:
 	else \
 		echo "Nothing to remove: $(RAG_STORAGE) (already absent)"; \
 	fi
+
+# --- Scheduled prompts: APScheduler jobs + metadata.json / prompt.txt from disk (see scheduled_prompts.storage_path) ---
+
+schedules-list: install
+	PYTHONPATH=. $(PY) -c "from common.tools.prompt_scheduler.prompt_scheduler import print_scheduled_prompt_jobs; print_scheduled_prompt_jobs()"

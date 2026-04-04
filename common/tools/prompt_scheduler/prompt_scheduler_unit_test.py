@@ -103,6 +103,32 @@ def test_result_sent_to_owner(mock_send_rev, mock_draft, tmp_path, monkeypatch):
     )
 
 
+def test_print_scheduled_prompt_jobs_lists_job(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(sched, "scheduled_prompts_root", lambda: tmp_path)
+    _write_job(tmp_path, "sched_list_test", _future_meta(cron="0 9 * * *"))
+
+    sched.print_scheduled_prompt_jobs()
+
+    out = capsys.readouterr().out
+    assert "sched_list_test" in out
+    assert "run_scheduled_prompt" in out
+    assert "metadata.json" in out
+    assert '"channel_id": "C1"' in out
+    assert "prompt.txt" in out
+    assert "Check thread." in out
+    assert sched._scheduler is None  # noqa: SLF001
+
+
+def test_print_scheduled_prompt_jobs_empty(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(sched, "scheduled_prompts_root", lambda: tmp_path)
+    tmp_path.mkdir(parents=True, exist_ok=True)
+
+    sched.print_scheduled_prompt_jobs()
+
+    assert "(no scheduled prompt jobs)" in capsys.readouterr().out
+    assert sched._scheduler is None  # noqa: SLF001
+
+
 @patch("common.tools.prompt_scheduler.prompt_scheduler.BackgroundScheduler")
 def test_sequential_executor_config(mock_bs):
     sched.shutdown_scheduler()
