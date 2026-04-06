@@ -1,4 +1,4 @@
-"""Single path: resolve thread context, prepare_draft, unified errors, Revise ephemeral."""
+"""Run the copilot ReAct loop and send the reply confirmation ephemeral."""
 
 from __future__ import annotations
 
@@ -10,30 +10,27 @@ from common.slack.copilot_pipeline import (
     ThreadFetchError,
     fetch_channel_tail_messages,
     fetch_thread_messages,
-    prepare_draft,
+    run_react_loop,
 )
 from common.slack.slack_api import slack_api
+from common.slack.slack_bot.thread_reply_confirmation import ReviseError
 
 _logger = logging.getLogger(__name__)
 
 CHANNEL_INVITE_EPHEMERAL = "Add me to this channel first. /invite @CoPilot"
-NO_ACTION_DRAFT_TEXT = "No action taken."
+NO_ACTION_TEXT = "No action taken."
 
 
-class DraftReviseError(Exception):
-    """User-visible Revise flow error."""
-
-
-def format_prepare_failure_message(
+def _format_failure_message(
     copilot_trigger: str | None, copilot_action: str | None,
 ) -> str:
     parts = [p for p in (copilot_trigger, copilot_action) if p and str(p).strip()]
     if not parts:
-        return "Failed to process draft."
+        return "Failed to process request."
     return f"Failed to process: {', '.join(parts)}."
 
 
-def _resolve_thread_messages_when_needed(
+def _resolve_thread_messages(
     channel_id: str,
     thread_ts: str,
     context_kind: str,
@@ -46,12 +43,12 @@ def _resolve_thread_messages_when_needed(
         return fetch_channel_tail_messages(channel_id)
     anchor = (thread_ts or "").strip()
     if not anchor:
-        raise DraftReviseError("Missing thread anchor for revise.")
+        raise ReviseError("Missing thread anchor for revise.")
     return fetch_thread_messages(channel_id, anchor)
 
 
 @log
-def prepare_draft_and_send_ephemeral(
+def run_react_and_confirm(
     channel_id: str,
     thread_ts: str,
     recipient_user_id: str,
@@ -70,13 +67,13 @@ def prepare_draft_and_send_ephemeral(
     if not recipient_user_id:
         return
     try:
-        resolved_messages = _resolve_thread_messages_when_needed(
+        resolved_messages = _resolve_thread_messages(
             channel_id,
             thread_ts,
             context_kind,
             thread_messages,
         )
-        draft = prepare_draft(
+        reply_text = run_react_loop(
             channel_id,
             thread_ts,
             prepare_user_id,
@@ -97,7 +94,7 @@ def prepare_draft_and_send_ephemeral(
             CHANNEL_INVITE_EPHEMERAL,
         )
         return
-    except DraftReviseError as e:
+    except ReviseError as e:
         slack_api.send_ephemeral(
             channel_id,
             thread_ts,
@@ -106,26 +103,26 @@ def prepare_draft_and_send_ephemeral(
         )
         return
     except Exception:
-        _logger.exception("prepare_draft_and_send_ephemeral failed")
+        _logger.exception("run_react_and_confirm failed")
         slack_api.send_ephemeral(
             channel_id,
             thread_ts,
             recipient_user_id,
-            format_prepare_failure_message(copilot_trigger, copilot_action),
+            _format_failure_message(copilot_trigger, copilot_action),
         )
         return
 
-    if not (draft or "").strip():
-        draft = NO_ACTION_DRAFT_TEXT
-    from common.slack.slack_bot.draft_revise_actions import (
-        send_draft_ephemeral_with_revise,
+    if not (reply_text or "").strip():
+        reply_text = NO_ACTION_TEXT
+    from common.slack.slack_bot.thread_reply_confirmation import (
+        send_reply_confirmation,
     )
 
-    send_draft_ephemeral_with_revise(
+    send_reply_confirmation(
         channel_id,
         thread_ts,
         recipient_user_id,
         prepare_user_id,
-        draft,
+        reply_text,
         context_kind=context_kind,
     )

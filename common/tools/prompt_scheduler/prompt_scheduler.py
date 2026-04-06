@@ -9,7 +9,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from common.log import log
-from common.slack.slack_bot.draft_delivery import prepare_draft_and_send_ephemeral
+from common.slack.slack_bot.react_runner import run_react_and_confirm
 from common.tools.schedule_tool import SCHEDULE_PROMPT_TOOL, scheduled_prompts_root
 
 _logger = logging.getLogger("open_slack_copilot")
@@ -167,7 +167,7 @@ def run_scheduled_prompt(job_id: str):
 
     if not user_id:
         return
-    prepare_draft_and_send_ephemeral(
+    run_react_and_confirm(
         channel_id,
         thread_ts,
         user_id,

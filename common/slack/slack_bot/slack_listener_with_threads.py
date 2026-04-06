@@ -5,12 +5,12 @@ from slack_bolt import App
 from common.log import log
 from common.slack.copilot_pipeline import ThreadFetchError, resolve_copilot_slack_context
 from common.slack.slack_api import slack_api
-from common.slack.slack_bot import draft_revise_actions, tool_confirmation
+from common.slack.slack_bot import thread_reply_confirmation, tool_confirmation
 
 register_tool_confirmation_handlers = (
     tool_confirmation.register_tool_confirmation_handlers
 )
-register_draft_revise_handlers = draft_revise_actions.register_draft_revise_handlers
+register_reply_confirmation_handlers = thread_reply_confirmation.register_reply_confirmation_handlers
 
 _MENTION_TOKEN_RE = re.compile(r"<@[^>]+>\s*")
 
@@ -41,7 +41,7 @@ def register_copilot_command(app: App, handler):
             channel_name=command.get("channel_name"),
             context_kind="thread",
             copilot_trigger="slash_command",
-            copilot_action="suggested_draft",
+            copilot_action="send_thread_reply",
         )
 
 
@@ -73,7 +73,7 @@ def register_copilot_shortcut(app: App, handler):
             channel_name=shortcut["channel"].get("name"),
             context_kind=context_kind,
             copilot_trigger="message_shortcut",
-            copilot_action="suggested_draft",
+            copilot_action="send_thread_reply",
         )
 
 
@@ -115,7 +115,7 @@ def register_copilot_app_mention(app: App, handler, bot_user_id: str | None = No
             channel_name=None,
             context_kind=context_kind,
             copilot_trigger="app_mention",
-            copilot_action="suggested_draft",
+            copilot_action="send_thread_reply",
         )
 
 

@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 from common.llm.llm_client.llm_client import AgentToolLoopResult
 from common.slack.copilot_pipeline import (
-    prepare_draft,
+    run_react_loop,
     resolve_copilot_slack_context,
     ThreadFetchError,
 )
@@ -42,7 +42,7 @@ class TestResolveCopilotSlackContext:
             raise AssertionError("expected ThreadFetchError")
 
 
-class TestPrepareDraftExcludedTools:
+class TestRunReactLoopExcludedTools:
     @patch("common.slack.copilot_pipeline.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
@@ -60,7 +60,7 @@ class TestPrepareDraftExcludedTools:
         mock_llm.agent_tool_loop.return_value = AgentToolLoopResult("ok", [])
         mock_fetch.return_value = [{"text": "x"}]
 
-        prepare_draft(
+        run_react_loop(
             "C", "T1", "U1", "",
             excluded_tools=[SCHEDULE_PROMPT_TOOL],
         )
@@ -70,13 +70,13 @@ class TestPrepareDraftExcludedTools:
         assert LIST_USERGROUP_MEMBERS_TOOL in tools_passed
 
 
-class TestPrepareDraftToolErrorsInEphemeral:
+class TestRunReactLoopToolErrorsInOutput:
     @patch("common.slack.copilot_pipeline.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
     @patch("common.slack.copilot_pipeline.llm_client")
     @patch("common.slack.copilot_pipeline.slack_api")
-    def test_appends_tool_errors_to_draft_text(
+    def test_appends_tool_errors_to_output_text(
         self, mock_slack, mock_llm, mock_pd, mock_rag, mock_fetch,
     ):
         mock_pd.select_skills.return_value = []
@@ -94,7 +94,7 @@ class TestPrepareDraftToolErrorsInEphemeral:
         )
         mock_fetch.return_value = [{"text": "x"}]
 
-        out = prepare_draft("C", "T1", "U1", "hi")
+        out = run_react_loop("C", "T1", "U1", "hi")
 
         assert "Draft body." in out
         assert "*Tool errors*" in out

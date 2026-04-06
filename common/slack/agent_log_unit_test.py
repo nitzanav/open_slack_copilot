@@ -24,7 +24,7 @@ def test_append_and_read_roundtrip(agent_root):
             "channel": "C1",
             "thread_ts": "1.2",
             "trigger": "slash_command",
-            "action": "suggested_draft",
+            "action": "send_thread_reply",
             "summary": "wrote shorter draft",
         }
     )
@@ -49,14 +49,14 @@ def test_format_agent_log_section_compact():
             {
                 "timestamp": "2026-03-14T16:26:00+00:00",
                 "trigger": "message_shortcut_revise",
-                "action": "suggested_draft",
+                "action": "send_thread_reply",
                 "summary": "wrote shorter draft",
             }
         ]
     )
     assert "## Agent log" in text
     assert "message shortcut revise" in text
-    assert "suggested draft" in text
+    assert "send thread reply" in text
     assert "C0" not in text
 
 
@@ -65,7 +65,7 @@ def test_summarize_uses_llm(mock_gen):
     long_draft = "Try IT. " * 20  # >= 100 chars so summarizer LLM is used
     out = agent_log.summarize_copilot_run(
         trigger="message_shortcut",
-        action="suggested_draft",
+        action="send_thread_reply",
         user_text="help",
         final_text=long_draft,
         tool_trace=[],
@@ -78,7 +78,7 @@ def test_summarize_uses_llm(mock_gen):
 def test_summarize_short_final_skips_llm(mock_gen):
     out = agent_log.summarize_copilot_run(
         trigger="app_mention",
-        action="suggested_draft",
+        action="send_thread_reply",
         user_text="hi",
         final_text="Short reply here.",
         tool_trace=[],
@@ -102,7 +102,7 @@ def test_format_agent_log_section_includes_tool_names():
             {
                 "timestamp": "2026-03-14T16:26:00+00:00",
                 "trigger": "app_mention",
-                "action": "suggested_draft",
+                "action": "send_thread_reply",
                 "summary": "Scheduled hourly follow-up.",
                 "tools": [
                     {"name": "schedule_prompt", "result_preview": '{"status":"scheduled"}'}
@@ -116,7 +116,7 @@ def test_format_agent_log_section_includes_tool_names():
 def test_summarize_fallback_schedule_tool():
     out = agent_log.summarize_copilot_run(
         trigger="slash_command",
-        action="suggested_draft",
+        action="send_thread_reply",
         user_text="",
         final_text="",
         tool_trace=[ToolCallRecord("schedule_prompt", '{"status":"scheduled"}')],

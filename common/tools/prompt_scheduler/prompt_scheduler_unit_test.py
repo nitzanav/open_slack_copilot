@@ -36,8 +36,8 @@ def _future_meta(**overrides) -> dict:
     return meta
 
 
-@patch("common.tools.prompt_scheduler.prompt_scheduler.prepare_draft_and_send_ephemeral")
-def test_run_calls_prepare_draft_with_prompt(mock_send, tmp_path, monkeypatch):
+@patch("common.tools.prompt_scheduler.prompt_scheduler.run_react_and_confirm")
+def test_run_calls_react_loop_with_prompt(mock_send, tmp_path, monkeypatch):
     monkeypatch.setattr(sched, "scheduled_prompts_root", lambda: tmp_path)
     prompt_text = "Remind everyone about the deadline."
     _write_job(tmp_path, "sched_ok", _future_meta(), prompt=prompt_text)
@@ -67,16 +67,16 @@ def test_expiration_removes_job(mock_remove, tmp_path, monkeypatch):
     mock_remove.assert_called_once_with("sched_exp", delete_files=True)
 
 
-@patch("common.slack.slack_bot.draft_delivery.fetch_thread_messages")
+@patch("common.slack.slack_bot.react_runner.fetch_thread_messages")
 @patch("common.tools.prompt_scheduler.prompt_scheduler.remove_job")
-@patch("common.slack.slack_bot.draft_delivery.slack_api")
+@patch("common.slack.slack_bot.react_runner.slack_api")
 def test_thread_inaccessible_sends_invite_does_not_remove_job(
     mock_slack, mock_remove, mock_fetch, tmp_path, monkeypatch,
 ):
     monkeypatch.setattr(sched, "scheduled_prompts_root", lambda: tmp_path)
     _write_job(tmp_path, "sched_bad", _future_meta())
     from common.slack.copilot_pipeline import ThreadFetchError
-    from common.slack.slack_bot.draft_delivery import CHANNEL_INVITE_EPHEMERAL
+    from common.slack.slack_bot.react_runner import CHANNEL_INVITE_EPHEMERAL
 
     mock_fetch.side_effect = ThreadFetchError("gone")
 
@@ -88,23 +88,23 @@ def test_thread_inaccessible_sends_invite_does_not_remove_job(
     )
 
 
-@patch("common.slack.slack_bot.draft_delivery.fetch_thread_messages")
-@patch("common.slack.slack_bot.draft_delivery.prepare_draft")
-@patch("common.slack.slack_bot.draft_revise_actions.send_draft_ephemeral_with_revise")
-def test_result_sent_to_scheduling_user(mock_send_rev, mock_draft, mock_fetch, tmp_path, monkeypatch):
+@patch("common.slack.slack_bot.react_runner.fetch_thread_messages")
+@patch("common.slack.slack_bot.react_runner.run_react_loop")
+@patch("common.slack.slack_bot.thread_reply_confirmation.send_reply_confirmation")
+def test_result_sent_to_scheduling_user(mock_send_confirm, mock_react, mock_fetch, tmp_path, monkeypatch):
     monkeypatch.setattr(sched, "scheduled_prompts_root", lambda: tmp_path)
     _write_job(tmp_path, "sched_user", _future_meta())
     mock_fetch.return_value = []
-    mock_draft.return_value = "Here is the draft"
+    mock_react.return_value = "Here is the reply"
 
     sched.run_scheduled_prompt("sched_user")
 
-    mock_send_rev.assert_called_once_with(
+    mock_send_confirm.assert_called_once_with(
         "C1",
         "T1",
         "U1",
         "U1",
-        "Here is the draft",
+        "Here is the reply",
         context_kind="thread",
     )
 
