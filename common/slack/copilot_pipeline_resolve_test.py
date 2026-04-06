@@ -89,7 +89,7 @@ class TestPrepareDraftToolErrorsInEphemeral:
             "Draft body.",
             [],
             tool_errors=[
-                "send_slack_pm: Error: requester_user_id is required to send DM confirmation.",
+                "send_slack_pm: Error: requester_user_id is required to show confirmation.",
             ],
         )
         mock_fetch.return_value = [{"text": "x"}]
