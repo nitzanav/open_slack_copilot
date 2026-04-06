@@ -1,7 +1,7 @@
 import json
 
 from common.slack.slack_api import slack_api
-from common.slack.slack_bot.dm_confirmation import suggest_sending_dm
+from common.slack.slack_bot.tool_confirmation import queue_tool_confirmation
 from common.tools.draft_context import get_invocation
 
 SEND_SLACK_PM_TOOL = {
@@ -10,7 +10,7 @@ SEND_SLACK_PM_TOOL = {
         "name": "send_slack_pm",
         "description": (
             "Queue a direct message to a workspace member. "
-            "The requesting user must confirm before anything is sent."
+            "The requesting user confirms the message in Slack before it is sent."
         ),
         "parameters": {
             "type": "object",
@@ -47,13 +47,17 @@ def handle_send_slack_pm_call(arguments_json: str) -> str:
     except _ValidationError as e:
         return json.dumps({"error": str(e)})
 
-    label = slack_api.get_user_display_name(uid) or user
-    result = suggest_sending_dm(
-        target_user_id=uid,
-        message=message,
+    result = queue_tool_confirmation(
+        tool_name="send_slack_pm",
+        text_content=message,
+        payload={
+            "target_user_id": uid,
+            "channel_id": inv["channel_id"],
+            "thread_ts": inv.get("thread_ts"),
+            "prepare_user_id": inv.get("user_id") or "",
+        },
         channel_id=inv["channel_id"],
         thread_ts=inv.get("thread_ts"),
-        target_label=label,
         requester_user_id=inv.get("user_id") or "",
     )
     if result.startswith("Error:"):
@@ -71,5 +75,5 @@ def _resolve_target_user(user: str) -> str:
 def _require_invocation_context() -> dict:
     inv = get_invocation()
     if not inv:
-        raise _ValidationError("Missing invocation context for DM confirmation")
+        raise _ValidationError("Missing invocation context for tool confirmation")
     return inv

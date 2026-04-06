@@ -5,9 +5,11 @@ from slack_bolt import App
 from common.log import log
 from common.slack.copilot_pipeline import ThreadFetchError, resolve_copilot_slack_context
 from common.slack.slack_api import slack_api
-from common.slack.slack_bot import dm_confirmation, draft_revise_actions
+from common.slack.slack_bot import draft_revise_actions, tool_confirmation
 
-register_dm_confirmation_handlers = dm_confirmation.register_dm_confirmation_handlers
+register_tool_confirmation_handlers = (
+    tool_confirmation.register_tool_confirmation_handlers
+)
 register_draft_revise_handlers = draft_revise_actions.register_draft_revise_handlers
 
 _MENTION_TOKEN_RE = re.compile(r"<@[^>]+>\s*")

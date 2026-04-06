@@ -26,7 +26,7 @@ def _get_bot_user_id() -> str | None:
 
 def start():
     app = slack_listener.create_app()
-    slack_listener_with_threads.register_dm_confirmation_handlers(app)
+    slack_listener_with_threads.register_tool_confirmation_handlers(app)
     slack_listener_with_threads.register_draft_revise_handlers(app)
     slack_listener_with_threads.register_copilot_command(app, _handle_copilot)
     slack_listener_with_threads.register_copilot_shortcut(app, _handle_copilot)
