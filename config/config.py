@@ -11,7 +11,12 @@ except ImportError:
 
 # Ensure required env keys exist so @format {env[KEY]} doesn't raise KeyError.
 # Validators will report a proper validation error message if missing or empty.
-for _key in ("SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "OPENAI_API_KEY"):
+for _key in (
+    "SLACK_BOT_TOKEN",
+    "SLACK_APP_TOKEN",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+):
     os.environ.setdefault(_key, "")
 
 from dynaconf import Dynaconf, Validator

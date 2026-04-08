@@ -19,8 +19,12 @@ scheduled_prompts:
   default_expiry_days: 7
 
 llm:
+  # Completion backend: openai (default) | anthropic (stub until implemented).
+  provider: "openai"
   model: "gpt-4o"
   openai_api_key: "@format {env[OPENAI_API_KEY]}"
+  # Used when provider is anthropic (not wired yet).
+  anthropic_api_key: "@format {env[ANTHROPIC_API_KEY]}"
   max_tool_rounds: 24
   max_tool_result_preview: 600
 
