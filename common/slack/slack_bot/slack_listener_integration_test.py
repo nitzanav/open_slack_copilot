@@ -36,9 +36,9 @@ class TestSlashCommandEndToEnd:
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
     @patch("common.slack.copilot_pipeline.llm_client")
-    @patch("common.slack.slack_bot.react_runner.slack_api")
+    @patch("common.slack.slack_bot.react_runner.copilot_user_notify")
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
-    def test_full_chain(self, mock_slack_api, mock_react_slack, mock_llm, mock_pd, mock_rag, mock_fetch):
+    def test_full_chain(self, mock_slack_api, mock_react_notify, mock_llm, mock_pd, mock_rag, mock_fetch):
         mock_fetch.return_value = THREAD_3
         mock_llm.agent_tool_loop.return_value = AgentToolLoopResult(
             "",
@@ -69,15 +69,16 @@ class TestSlashCommandEndToEnd:
         for msg in THREAD_3:
             assert msg["text"] in prompt
 
-        mock_react_slack.send_ephemeral.assert_not_called()
+        mock_react_notify.notify_error.assert_not_called()
+        mock_react_notify.notify_react_feedback.assert_not_called()
 
     @patch("common.slack.slack_bot.react_runner.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
     @patch("common.slack.copilot_pipeline.llm_client")
-    @patch("common.slack.slack_bot.react_runner.slack_api")
+    @patch("common.slack.slack_bot.react_runner.copilot_user_notify")
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
-    def test_singleton_thread_end_to_end(self, mock_slack_api, mock_react_slack, mock_llm, mock_pd, mock_rag, mock_fetch):
+    def test_singleton_thread_end_to_end(self, mock_slack_api, mock_react_notify, mock_llm, mock_pd, mock_rag, mock_fetch):
         mock_fetch.return_value = THREAD_1
         mock_llm.agent_tool_loop.return_value = AgentToolLoopResult(
             "",
@@ -96,7 +97,8 @@ class TestSlashCommandEndToEnd:
         command = {"channel_id": "C2", "user_id": "U2", "text": "", "thread_ts": "T2"}
 
         registered_fn(ack=MagicMock(), command=command)
-        mock_react_slack.send_ephemeral.assert_not_called()
+        mock_react_notify.notify_error.assert_not_called()
+        mock_react_notify.notify_react_feedback.assert_not_called()
 
     def test_thread_enrichment_passes_correct_ts(self):
         from common.slack.slack_bot.slack_listener_with_threads import register_copilot_command

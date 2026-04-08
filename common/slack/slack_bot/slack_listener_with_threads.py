@@ -4,6 +4,7 @@ from slack_bolt import App
 
 from common.log import log
 from common.slack.copilot_pipeline import ThreadFetchError, resolve_copilot_slack_context
+from common.slack import copilot_user_notify
 from common.slack.slack_api import slack_api
 from common.slack.slack_bot import tool_confirmation
 
@@ -29,7 +30,9 @@ def register_copilot_command(app: App, handler):
 
         thread_ts = _extract_thread_ts(command)
         if not thread_ts:
-            slack_api.send_ephemeral(channel_id, None, user_id, "Use /copilot inside a thread.")
+            copilot_user_notify.notify_error(
+                channel_id, None, user_id, "Use /copilot inside a thread.",
+            )
             return
 
         handler(
@@ -96,7 +99,7 @@ def register_copilot_app_mention(app: App, handler, bot_user_id: str | None = No
         try:
             anchor_ts, thread_messages = resolve_copilot_slack_context(channel_id, message)
         except ThreadFetchError:
-            slack_api.send_ephemeral(
+            copilot_user_notify.notify_error(
                 channel_id,
                 anchor_fallback,
                 user_id,
@@ -126,7 +129,7 @@ def _send_channel_error(channel_id: str, thread_ts: str, user_id: str,
                        response_url: str | None):
     msg = "Add me to this channel first. /invite @CoPilot"
     try:
-        slack_api.send_ephemeral(channel_id, thread_ts, user_id, msg)
+        copilot_user_notify.notify_error(channel_id, thread_ts, user_id, msg)
         return
     except Exception:
         pass

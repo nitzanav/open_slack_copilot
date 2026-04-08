@@ -10,6 +10,7 @@ from typing import Any, Callable
 from common.llm.llm_client import llm_client
 from common.slack import agent_log
 from common.progressive_disclosure import progressive_disclosure
+from common.slack import copilot_user_notify
 from common.slack.slack_api import slack_api
 from common.slack.slack_rag import slack_rag
 from common.slack.thread_format import format_slack_thread_for_prompt
@@ -317,7 +318,7 @@ def fetch_rag_context(
 ) -> list[dict]:
     try:
         if not slack_rag.is_ready(channel_id):
-            slack_api.send_ephemeral(
+            copilot_user_notify.notify_progress(
                 channel_id, thread_ts, user_id,
                 "Preparing RAG for this channel, will update when done.",
             )
@@ -340,7 +341,7 @@ def fetch_cross_channel_rag(
         missing = slack_rag.missing_channels(cross_channels)
         if missing:
             names = ", ".join(missing)
-            slack_api.send_ephemeral(
+            copilot_user_notify.notify_progress(
                 channel_id, thread_ts, user_id,
                 f"Creating RAG for {names}, please wait.",
             )

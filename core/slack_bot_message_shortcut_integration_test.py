@@ -59,10 +59,10 @@ class TestMessageShortcutEndToEnd:
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
     @patch("common.slack.copilot_pipeline.llm_client")
-    @patch("common.slack.slack_bot.react_runner.slack_api")
+    @patch("common.slack.slack_bot.react_runner.copilot_user_notify")
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
     def test_shortcut_full_chain_sends_reply(
-        self, mock_slack_api, mock_react_slack, mock_llm, mock_pd, mock_rag, mock_fetch,
+        self, mock_slack_api, mock_react_notify, mock_llm, mock_pd, mock_rag, mock_fetch,
     ):
         mock_fetch.return_value = THREAD_3
         mock_llm.agent_tool_loop.return_value = AgentToolLoopResult(
@@ -91,16 +91,17 @@ class TestMessageShortcutEndToEnd:
         for msg in THREAD_3:
             assert msg["text"] in prompt
 
-        mock_react_slack.send_ephemeral.assert_not_called()
+        mock_react_notify.notify_error.assert_not_called()
+        mock_react_notify.notify_react_feedback.assert_not_called()
 
     @patch("common.slack.copilot_pipeline.fetch_channel_tail_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
     @patch("common.slack.copilot_pipeline.llm_client")
-    @patch("common.slack.slack_bot.react_runner.slack_api")
+    @patch("common.slack.slack_bot.react_runner.copilot_user_notify")
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
     def test_shortcut_channel_message_uses_message_ts(
-        self, mock_slack_api, mock_react_slack, mock_llm, mock_pd, mock_rag, mock_tail,
+        self, mock_slack_api, mock_react_notify, mock_llm, mock_pd, mock_rag, mock_tail,
     ):
         mock_tail.return_value = THREAD_3
         mock_llm.agent_tool_loop.return_value = AgentToolLoopResult(
@@ -124,7 +125,8 @@ class TestMessageShortcutEndToEnd:
         registered_fn(ack=MagicMock(), shortcut=shortcut, client=MagicMock())
 
         mock_tail.assert_called_once_with("C1")
-        mock_react_slack.send_ephemeral.assert_not_called()
+        mock_react_notify.notify_error.assert_not_called()
+        mock_react_notify.notify_react_feedback.assert_not_called()
 
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
     def test_shortcut_callback_registration(self, mock_slack_api):

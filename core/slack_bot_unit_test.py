@@ -103,8 +103,8 @@ class TestLoadExamples:
 
 class TestCrossChannelRag:
     @patch("common.slack.copilot_pipeline.slack_rag")
-    @patch("common.slack.copilot_pipeline.slack_api")
-    def test_fetch_cross_channel_with_missing(self, mock_slack, mock_rag):
+    @patch("common.slack.copilot_pipeline.copilot_user_notify")
+    def test_fetch_cross_channel_with_missing(self, mock_notify, mock_rag):
         original = list(settings.rag.cross_channel)
         settings.set("rag.cross_channel", ["eng", "prod"])
         try:
@@ -113,8 +113,8 @@ class TestCrossChannelRag:
 
             result = _fetch_cross_channel_rag("support", "T1", "U1", "deploy question")
 
-            mock_slack.send_ephemeral.assert_called_once()
-            assert "prod" in mock_slack.send_ephemeral.call_args[0][3]
+            mock_notify.notify_progress.assert_called_once()
+            assert "prod" in mock_notify.notify_progress.call_args[0][3]
             mock_rag.build.assert_called_once_with("prod", 2592000.0)
             assert result == [{"text": "cross result", "channel": "eng"}]
         finally:
@@ -197,10 +197,10 @@ class TestHandleCopilot:
     @patch("common.slack.slack_bot.react_runner.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
-    @patch("common.slack.slack_bot.react_runner.slack_api")
+    @patch("common.slack.slack_bot.react_runner.copilot_user_notify")
     @patch("common.slack.copilot_pipeline.llm_client")
     def test_reply_confirmation_requested_skips_extra_ephemeral(
-        self, mock_llm, mock_slack, mock_pd, mock_rag, mock_fetch,
+        self, mock_llm, mock_notify, mock_pd, mock_rag, mock_fetch,
     ):
         mock_pd.select_skills.return_value = []
         mock_pd.get_default_instruction.return_value = "default"
@@ -221,14 +221,15 @@ class TestHandleCopilot:
         mock_fetch.return_value = THREAD_3
 
         _handle_copilot("C123", "T123", "U001", "help")
-        mock_slack.send_ephemeral.assert_not_called()
+        mock_notify.notify_error.assert_not_called()
+        mock_notify.notify_react_feedback.assert_not_called()
 
     @patch("common.slack.slack_bot.react_runner.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
-    @patch("common.slack.slack_bot.react_runner.slack_api")
+    @patch("common.slack.slack_bot.react_runner.copilot_user_notify")
     @patch("common.slack.copilot_pipeline.llm_client")
-    def test_llm_error_sends_error_ephemeral(self, mock_llm, mock_slack, mock_pd, mock_rag, mock_fetch):
+    def test_llm_error_sends_error_ephemeral(self, mock_llm, mock_notify, mock_pd, mock_rag, mock_fetch):
         mock_pd.select_skills.return_value = []
         mock_pd.get_default_instruction.return_value = "default"
         mock_rag.is_ready.return_value = True
@@ -239,29 +240,29 @@ class TestHandleCopilot:
         mock_fetch.return_value = THREAD_3
 
         _handle_copilot("C123", "T123", "U001", "")
-        assert "Failed to process" in mock_slack.send_ephemeral.call_args[0][3]
+        assert "Failed to process" in mock_notify.notify_error.call_args[0][3]
 
     @patch("common.slack.slack_bot.react_runner.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
-    @patch("common.slack.slack_bot.react_runner.slack_api")
+    @patch("common.slack.slack_bot.react_runner.copilot_user_notify")
     @patch("common.slack.copilot_pipeline.llm_client")
     def test_thread_fetch_error_sends_invite_ephemeral(
-        self, mock_llm, mock_slack, mock_pd, mock_rag, mock_fetch,
+        self, mock_llm, mock_notify, mock_pd, mock_rag, mock_fetch,
     ):
         mock_fetch.side_effect = ThreadFetchError("not in channel")
         _handle_copilot("C123", "T123", "U001", "hi")
-        msg = mock_slack.send_ephemeral.call_args[0][3]
+        msg = mock_notify.notify_error.call_args[0][3]
         assert "invite" in msg.lower()
         mock_llm.agent_tool_loop.assert_not_called()
 
     @patch("common.slack.slack_bot.react_runner.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
-    @patch("common.slack.slack_bot.react_runner.slack_api")
+    @patch("common.slack.slack_bot.react_runner.copilot_user_notify")
     @patch("common.slack.copilot_pipeline.llm_client")
     def test_missing_send_thread_reply_sends_ephemeral(
-        self, mock_llm, mock_slack, mock_pd, mock_rag, mock_fetch,
+        self, mock_llm, mock_notify, mock_pd, mock_rag, mock_fetch,
     ):
         mock_pd.select_skills.return_value = []
         mock_pd.get_default_instruction.return_value = "default"
@@ -273,5 +274,5 @@ class TestHandleCopilot:
         mock_fetch.return_value = THREAD_3
 
         _handle_copilot("C123", "T123", "U001", "help")
-        mock_slack.send_ephemeral.assert_called_once()
-        assert "send_thread_reply" in mock_slack.send_ephemeral.call_args[0][3]
+        mock_notify.notify_react_feedback.assert_called_once()
+        assert "send_thread_reply" in mock_notify.notify_react_feedback.call_args[0][3]

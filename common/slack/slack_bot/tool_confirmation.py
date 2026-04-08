@@ -8,6 +8,7 @@ from typing import Any
 from slack_bolt import App
 
 from common.log import log
+from common.slack import copilot_user_notify
 from common.slack.slack_api import slack_api
 from common.tools.copilot_tool import (
     ToolConfirmationSpec,
@@ -194,7 +195,7 @@ def _reply_ephemeral_from_action(body: dict, text: str) -> None:
     channel_id = body["channel"]["id"]
     user_id = body["user"]["id"]
     thread_ts = _ephemeral_thread_ts(body)
-    slack_api.send_ephemeral(channel_id, thread_ts, user_id, text)
+    copilot_user_notify.notify_user_text(channel_id, thread_ts, user_id, text)
 
 
 def _build_private_metadata(metadata_json: str, tool_text: str) -> str:
@@ -289,7 +290,7 @@ def queue_tool_confirmation(
         blocks = _build_confirmation_blocks(tool_name, spec, text_content, payload)
     except ValueError as e:
         return f"Error: {e}"
-    slack_api.send_ephemeral_blocks(
+    copilot_user_notify.notify_confirmation_blocks(
         channel_id,
         thread_ts,
         recipient,

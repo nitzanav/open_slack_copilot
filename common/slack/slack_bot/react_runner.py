@@ -15,7 +15,7 @@ from common.slack.copilot_pipeline import (
     fetch_thread_messages,
     run_react_loop,
 )
-from common.slack.slack_api import slack_api
+from common.slack import copilot_user_notify
 from common.tools.copilot_tool import TOOL_JSON_STATUS_CONFIRMATION_REQUESTED
 
 _logger = logging.getLogger(__name__)
@@ -120,7 +120,7 @@ def run_react_and_confirm(
             context_kind=context_kind,
         )
     except ThreadFetchError:
-        slack_api.send_ephemeral(
+        copilot_user_notify.notify_error(
             channel_id,
             thread_ts,
             recipient_user_id,
@@ -128,7 +128,7 @@ def run_react_and_confirm(
         )
         return
     except ReviseError as e:
-        slack_api.send_ephemeral(
+        copilot_user_notify.notify_error(
             channel_id,
             thread_ts,
             recipient_user_id,
@@ -137,7 +137,7 @@ def run_react_and_confirm(
         return
     except Exception:
         _logger.exception("run_react_and_confirm failed")
-        slack_api.send_ephemeral(
+        copilot_user_notify.notify_error(
             channel_id,
             thread_ts,
             recipient_user_id,
@@ -165,7 +165,7 @@ def _post_loop_ephemeral(
     )
     if thread_reply_confirmation_requested:
         if loop_out.tool_errors:
-            slack_api.send_ephemeral(
+            copilot_user_notify.notify_react_feedback(
                 channel_id,
                 thread_ts,
                 recipient_user_id,
@@ -181,7 +181,7 @@ def _post_loop_ephemeral(
     if assistant:
         excerpt = assistant[:800] + ("…" if len(assistant) > 800 else "")
         ephemeral_sections.append(f"*Assistant text (not submitted):*\n{excerpt}")
-    slack_api.send_ephemeral(
+    copilot_user_notify.notify_react_feedback(
         channel_id,
         thread_ts,
         recipient_user_id,

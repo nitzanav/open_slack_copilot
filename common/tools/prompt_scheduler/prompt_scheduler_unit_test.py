@@ -71,9 +71,9 @@ def test_expiration_removes_job(mock_remove, tmp_path, monkeypatch):
 
 @patch("common.slack.slack_bot.react_runner.fetch_thread_messages")
 @patch("common.tools.prompt_scheduler.prompt_scheduler.remove_job")
-@patch("common.slack.slack_bot.react_runner.slack_api")
+@patch("common.slack.slack_bot.react_runner.copilot_user_notify")
 def test_thread_inaccessible_sends_invite_does_not_remove_job(
-    mock_slack, mock_remove, mock_fetch, tmp_path, monkeypatch,
+    mock_notify, mock_remove, mock_fetch, tmp_path, monkeypatch,
 ):
     monkeypatch.setattr(sched, "scheduled_prompts_root", lambda: tmp_path)
     _write_job(tmp_path, "sched_bad", _future_meta())
@@ -85,15 +85,15 @@ def test_thread_inaccessible_sends_invite_does_not_remove_job(
     sched.run_scheduled_prompt("sched_bad")
 
     mock_remove.assert_not_called()
-    mock_slack.send_ephemeral.assert_called_once_with(
+    mock_notify.notify_error.assert_called_once_with(
         "C1", "T1", "U1", CHANNEL_INVITE_EPHEMERAL,
     )
 
 
-@patch("common.slack.slack_bot.react_runner.slack_api")
+@patch("common.slack.slack_bot.react_runner.copilot_user_notify")
 @patch("common.slack.slack_bot.react_runner.fetch_thread_messages")
 @patch("common.slack.slack_bot.react_runner.run_react_loop")
-def test_result_sent_to_scheduling_user(mock_react, mock_fetch, mock_slack, tmp_path, monkeypatch):
+def test_result_sent_to_scheduling_user(mock_react, mock_fetch, mock_notify, tmp_path, monkeypatch):
     monkeypatch.setattr(sched, "scheduled_prompts_root", lambda: tmp_path)
     _write_job(tmp_path, "sched_user", _future_meta())
     mock_fetch.return_value = []
@@ -105,7 +105,8 @@ def test_result_sent_to_scheduling_user(mock_react, mock_fetch, mock_slack, tmp_
 
     sched.run_scheduled_prompt("sched_user")
 
-    mock_slack.send_ephemeral.assert_not_called()
+    mock_notify.notify_error.assert_not_called()
+    mock_notify.notify_react_feedback.assert_not_called()
 
 
 def test_print_scheduled_prompt_jobs_lists_job(tmp_path, monkeypatch, capsys):

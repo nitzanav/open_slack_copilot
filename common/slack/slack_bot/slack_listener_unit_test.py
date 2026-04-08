@@ -62,8 +62,8 @@ class TestRegisterCopilotCommand:
             copilot_action="send_thread_reply",
         )
 
-    @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
-    def test_no_thread_ts_sends_error(self, mock_slack_api):
+    @patch("common.slack.slack_bot.slack_listener_with_threads.copilot_user_notify")
+    def test_no_thread_ts_sends_error(self, mock_notify):
         app = MagicMock()
         handler = MagicMock()
 
@@ -73,8 +73,8 @@ class TestRegisterCopilotCommand:
         registered_fn(ack=MagicMock(), command={"channel_id": "C1", "user_id": "U1", "text": ""})
 
         handler.assert_not_called()
-        mock_slack_api.send_ephemeral.assert_called_once()
-        assert "thread" in mock_slack_api.send_ephemeral.call_args[0][3].lower()
+        mock_notify.notify_error.assert_called_once()
+        assert "thread" in mock_notify.notify_error.call_args[0][3].lower()
 
 class TestRegisterCopilotShortcut:
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
@@ -248,8 +248,8 @@ class TestRegisterCopilotAppMention:
         handler.assert_not_called()
 
     @patch("common.slack.slack_bot.slack_listener_with_threads.resolve_copilot_slack_context")
-    @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
-    def test_mention_resolve_error_sends_ephemeral(self, mock_slack_api, mock_resolve):
+    @patch("common.slack.slack_bot.slack_listener_with_threads.copilot_user_notify")
+    def test_mention_resolve_error_sends_ephemeral(self, mock_notify, mock_resolve):
         from common.slack.copilot_pipeline import ThreadFetchError
 
         mock_resolve.side_effect = ThreadFetchError("nope")
@@ -266,7 +266,7 @@ class TestRegisterCopilotAppMention:
             "thread_ts": "6.0",
         })
 
-        mock_slack_api.send_ephemeral.assert_called_once_with(
+        mock_notify.notify_error.assert_called_once_with(
             "C9", "6.0", "UHUMAN",
             "Add me to this channel first. /invite @CoPilot",
         )
