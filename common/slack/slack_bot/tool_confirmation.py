@@ -296,7 +296,7 @@ def queue_tool_confirmation(
         spec.ephemeral_notification_text,
         blocks,
     )
-    return "Queued for confirmation"
+    return "Tool confirmation requested"
 
 
 @log

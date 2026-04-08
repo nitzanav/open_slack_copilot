@@ -27,7 +27,7 @@ The summary is the **primary user-meaningful outcome** of that run, not only the
 
 - A **reply draft** or **revision** (user asked shorter, more formal, etc.).
 - A **scheduled prompt** was registered (tool outcome dominates).
-- A **reminder / PM** was sent or queued (tool outcome dominates).
+- A **reminder / PM** was sent or held for tool confirmation (tool outcome dominates).
 
 The implementation must pass enough context (final text + **tool trace**) into the summarizer so it can choose the right emphasis.
 

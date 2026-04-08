@@ -42,7 +42,12 @@ class TestSlashCommandEndToEnd:
         mock_fetch.return_value = THREAD_3
         mock_llm.agent_tool_loop.return_value = AgentToolLoopResult(
             "",
-            [ToolCallRecord("send_thread_reply", '{"status":"queued","detail":"ok"}')],
+            [
+                ToolCallRecord(
+                    "send_thread_reply",
+                    '{"status":"tool_confirmation_requested","detail":"ok"}',
+                ),
+            ],
             [],
         )
         _mock_bot_deps(mock_llm, mock_pd, mock_rag)
@@ -76,7 +81,7 @@ class TestSlashCommandEndToEnd:
         mock_fetch.return_value = THREAD_1
         mock_llm.agent_tool_loop.return_value = AgentToolLoopResult(
             "",
-            [ToolCallRecord("send_thread_reply", '{"status":"queued"}')],
+            [ToolCallRecord("send_thread_reply", '{"status":"tool_confirmation_requested"}')],
             [],
         )
         _mock_bot_deps(mock_llm, mock_pd, mock_rag)

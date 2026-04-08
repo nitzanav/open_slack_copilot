@@ -5,6 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
+# JSON tool result when the handler showed Slack confirmation UI (Revise/Confirm), not final action.
+TOOL_JSON_STATUS_CONFIRMATION_REQUESTED = "tool_confirmation_requested"
+
 # ---------------------------------------------------------------------------
 # Confirmation metadata (defined on each tool that requires user confirmation)
 # ---------------------------------------------------------------------------

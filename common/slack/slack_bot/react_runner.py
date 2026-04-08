@@ -16,6 +16,7 @@ from common.slack.copilot_pipeline import (
     run_react_loop,
 )
 from common.slack.slack_api import slack_api
+from common.tools.copilot_tool import TOOL_JSON_STATUS_CONFIRMATION_REQUESTED
 
 _logger = logging.getLogger(__name__)
 
@@ -56,7 +57,10 @@ def _resolve_thread_messages(
     return fetch_thread_messages(channel_id, anchor)
 
 
-def _trace_has_queued_send_thread_reply(trace: list[ToolCallRecord]) -> bool:
+def _trace_shows_send_thread_reply_confirmation_requested(
+    trace: list[ToolCallRecord],
+) -> bool:
+    """True if send_thread_reply returned status tool_confirmation_requested (Slack UI was shown)."""
     for rec in reversed(trace):
         if (rec.name or "") != "send_thread_reply":
             continue
@@ -65,7 +69,7 @@ def _trace_has_queued_send_thread_reply(trace: list[ToolCallRecord]) -> bool:
             obj = json.loads(prev)
         except json.JSONDecodeError:
             continue
-        if isinstance(obj, dict) and obj.get("status") == "queued":
+        if isinstance(obj, dict) and obj.get("status") == TOOL_JSON_STATUS_CONFIRMATION_REQUESTED:
             return True
     return False
 
@@ -155,8 +159,11 @@ def _post_loop_ephemeral(
     recipient_user_id: str,
     loop_out: ReactLoopResult,
 ) -> None:
-    queued = _trace_has_queued_send_thread_reply(loop_out.tool_trace)
-    if queued:
+    # send_thread_reply already opened Revise/Confirm; only surface other tool failures.
+    thread_reply_confirmation_requested = _trace_shows_send_thread_reply_confirmation_requested(
+        loop_out.tool_trace,
+    )
+    if thread_reply_confirmation_requested:
         if loop_out.tool_errors:
             slack_api.send_ephemeral(
                 channel_id,
@@ -166,16 +173,17 @@ def _post_loop_ephemeral(
             )
         return
 
-    parts: list[str] = [_NO_SUBMIT_MSG]
+    # No successful send_thread_reply confirmation path: explain + optional errors + model text excerpt.
+    ephemeral_sections: list[str] = [_NO_SUBMIT_MSG]
     if loop_out.tool_errors:
-        parts.append(_format_tool_errors_ephemeral(loop_out.tool_errors))
+        ephemeral_sections.append(_format_tool_errors_ephemeral(loop_out.tool_errors))
     assistant = (loop_out.text or "").strip()
     if assistant:
         excerpt = assistant[:800] + ("…" if len(assistant) > 800 else "")
-        parts.append(f"*Assistant text (not submitted):*\n{excerpt}")
+        ephemeral_sections.append(f"*Assistant text (not submitted):*\n{excerpt}")
     slack_api.send_ephemeral(
         channel_id,
         thread_ts,
         recipient_user_id,
-        "\n\n".join(parts),
+        "\n\n".join(ephemeral_sections),
     )

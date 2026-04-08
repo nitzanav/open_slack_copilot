@@ -99,7 +99,7 @@ def test_result_sent_to_scheduling_user(mock_react, mock_fetch, mock_slack, tmp_
     mock_fetch.return_value = []
     mock_react.return_value = ReactLoopResult(
         "",
-        [ToolCallRecord("send_thread_reply", '{"status":"queued"}')],
+        [ToolCallRecord("send_thread_reply", '{"status":"tool_confirmation_requested"}')],
         [],
     )
 

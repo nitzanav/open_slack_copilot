@@ -3,7 +3,12 @@ from typing import Any
 
 from common.slack.slack_api import slack_api
 from common.slack.slack_bot.tool_confirmation import queue_tool_confirmation
-from common.tools.copilot_tool import CopilotTool, ToolConfirmationSpec, register_copilot_tool
+from common.tools.copilot_tool import (
+    TOOL_JSON_STATUS_CONFIRMATION_REQUESTED,
+    CopilotTool,
+    ToolConfirmationSpec,
+    register_copilot_tool,
+)
 from common.tools.react_context import get_invocation
 
 _TOOL_NAME = "send_thread_reply"
@@ -76,7 +81,7 @@ def _invoke(arguments_json: str) -> str:
     )
     if result.startswith("Error:"):
         return json.dumps({"error": result})
-    return json.dumps({"status": "queued", "detail": result})
+    return json.dumps({"status": TOOL_JSON_STATUS_CONFIRMATION_REQUESTED, "detail": result})
 
 
 def _execute_after_confirm(text: str, payload: dict[str, Any]) -> str:

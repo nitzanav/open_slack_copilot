@@ -55,7 +55,7 @@ Description: "Send a direct message to a user. The message will be shown to you 
 Parameters:
   - user (string): display name or user ID of the recipient
   - message (string): the DM content
-Returns: "DM queued for confirmation" (actual sending happens after user confirms)
+Returns: JSON with `status: tool_confirmation_requested` (actual sending happens after user confirms)
 ```
 
 ### Key Decisions
@@ -63,7 +63,7 @@ Returns: "DM queued for confirmation" (actual sending happens after user confirm
 - **Never auto-send** — all DMs require explicit user confirmation via Slack interactive buttons
 - **Ephemeral confirmation** — the DM preview is shown as ephemeral (only visible to the requesting user)
 - **Interactive buttons** — requires Slack Block Kit with action handlers registered in `slack_listener.py`
-- **Tool returns immediately** — the LLM gets "DM queued for confirmation" and can continue generating the rest of the draft
+- **Tool returns immediately** — the LLM gets JSON including `status: tool_confirmation_requested` and can continue generating the rest of the draft
 
 ## STP — Software Test Procedure
 
@@ -123,7 +123,7 @@ Returns: "DM queued for confirmation" (actual sending happens after user confirm
 
 ### Test Cases
 
-- **test_tool_returns_pending** — call `send_slack_pm` tool, assert returns "DM queued for confirmation", NOT sent
+- **test_tool_returns_pending** — call `send_slack_pm` tool, assert JSON has `tool_confirmation_requested`, NOT sent
 - **test_resolve_user_called** — assert `resolve_user` invoked with the user parameter
 - **test_confirmation_ephemeral_sent** — assert ephemeral with Block Kit buttons sent to requesting user
 - **test_confirm_sends_dm** — simulate "Send" button action, assert `slack_api.send_dm` called with correct user_id and text

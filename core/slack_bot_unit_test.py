@@ -199,7 +199,9 @@ class TestHandleCopilot:
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
     @patch("common.slack.slack_bot.react_runner.slack_api")
     @patch("common.slack.copilot_pipeline.llm_client")
-    def test_reply_queued_skips_extra_ephemeral(self, mock_llm, mock_slack, mock_pd, mock_rag, mock_fetch):
+    def test_reply_confirmation_requested_skips_extra_ephemeral(
+        self, mock_llm, mock_slack, mock_pd, mock_rag, mock_fetch,
+    ):
         mock_pd.select_skills.return_value = []
         mock_pd.get_default_instruction.return_value = "default"
         mock_rag.is_ready.return_value = True
@@ -208,7 +210,12 @@ class TestHandleCopilot:
         mock_rag.query_cross_channel.return_value = []
         mock_llm.agent_tool_loop.return_value = AgentToolLoopResult(
             "",
-            [ToolCallRecord("send_thread_reply", '{"status":"queued","detail":"ok"}')],
+            [
+                ToolCallRecord(
+                    "send_thread_reply",
+                    '{"status":"tool_confirmation_requested","detail":"ok"}',
+                ),
+            ],
             [],
         )
         mock_fetch.return_value = THREAD_3
