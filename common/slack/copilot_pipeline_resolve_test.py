@@ -8,6 +8,7 @@ from common.slack.copilot_pipeline import (
 )
 from common.tools.list_usergroup_members import LIST_USERGROUP_MEMBERS_TOOL
 from common.tools.schedule_tool import SCHEDULE_PROMPT_TOOL
+from common.tools.send_ephemeral_message import SEND_EPHEMERAL_MESSAGE_TOOL
 from common.tools.send_slack_pm import SEND_SLACK_PM_TOOL
 from common.tools.send_thread_reply import SEND_THREAD_REPLY_TOOL
 
@@ -69,6 +70,7 @@ class TestRunReactLoopExcludedTools:
         assert SCHEDULE_PROMPT_TOOL not in tools_passed
         assert SEND_SLACK_PM_TOOL in tools_passed
         assert SEND_THREAD_REPLY_TOOL in tools_passed
+        assert SEND_EPHEMERAL_MESSAGE_TOOL in tools_passed
         assert LIST_USERGROUP_MEMBERS_TOOL in tools_passed
 
 

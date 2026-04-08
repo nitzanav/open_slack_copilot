@@ -18,6 +18,7 @@ from common.tools.react_context import react_invocation_context
 from common.tools.copilot_tool import dispatch_copilot_tool as dispatch_registered_copilot_tool
 from common.tools.list_usergroup_members import LIST_USERGROUP_MEMBERS_TOOL
 from common.tools.schedule_tool import SCHEDULE_PROMPT_TOOL
+from common.tools.send_ephemeral_message import SEND_EPHEMERAL_MESSAGE_TOOL
 from common.tools.send_slack_pm import SEND_SLACK_PM_TOOL
 from common.tools.send_thread_reply import SEND_THREAD_REPLY_TOOL
 from config.config import settings, parse_duration_seconds
@@ -31,6 +32,7 @@ _INTERACTIVE_TOOLS = [
     SCHEDULE_PROMPT_TOOL,
     SEND_SLACK_PM_TOOL,
     SEND_THREAD_REPLY_TOOL,
+    SEND_EPHEMERAL_MESSAGE_TOOL,
     LIST_USERGROUP_MEMBERS_TOOL,
 ]
 
