@@ -60,7 +60,7 @@ class TestMessageShortcutEndToEnd:
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
     @patch("common.slack.copilot_pipeline.llm_client")
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
-    def test_shortcut_full_chain_sends_draft(self, mock_slack_api, mock_llm, mock_pd, mock_rag, mock_fetch):
+    def test_shortcut_full_chain_sends_reply(self, mock_slack_api, mock_llm, mock_pd, mock_rag, mock_fetch):
         mock_fetch.return_value = THREAD_3
         mock_llm.agent_tool_loop.return_value = AgentToolLoopResult("Generated draft from shortcut", [])
         _mock_bot_deps(mock_llm, mock_pd, mock_rag)
@@ -77,8 +77,8 @@ class TestMessageShortcutEndToEnd:
         shortcut = _shortcut_payload(channel_id="C1", user_id="U1")
 
         with patch(
-            "common.slack.slack_bot.draft_revise_actions.send_draft_ephemeral_with_revise",
-        ) as mock_rev:
+            "common.slack.slack_bot.thread_reply_confirmation.send_reply_confirmation",
+        ) as mock_confirm:
             registered_fn(ack=MagicMock(), shortcut=shortcut, client=MagicMock())
 
             mock_fetch.assert_called_once_with("C1", "1516229200.000000")
@@ -87,7 +87,7 @@ class TestMessageShortcutEndToEnd:
             for msg in THREAD_3:
                 assert msg["text"] in prompt
 
-            mock_rev.assert_called_once_with(
+            mock_confirm.assert_called_once_with(
                 "C1",
                 "1516229200.000000",
                 "U1",
@@ -118,12 +118,12 @@ class TestMessageShortcutEndToEnd:
         shortcut = _shortcut_payload(thread_ts=None)
 
         with patch(
-            "common.slack.slack_bot.draft_revise_actions.send_draft_ephemeral_with_revise",
-        ) as mock_rev:
+            "common.slack.slack_bot.thread_reply_confirmation.send_reply_confirmation",
+        ) as mock_confirm:
             registered_fn(ack=MagicMock(), shortcut=shortcut, client=MagicMock())
 
             mock_tail.assert_called_once_with("C1")
-            mock_rev.assert_called_once_with(
+            mock_confirm.assert_called_once_with(
                 "C1",
                 "1516229207.000133",
                 "U1",

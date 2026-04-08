@@ -6,12 +6,12 @@ from common.slack.copilot_pipeline import (
     get_checkpoint_seconds,
     get_cross_channel_ids,
     load_examples as _load_examples,
-    prepare_draft,
+    run_react_loop,
     select_skills as _select_skills,
 )
 from common.slack.slack_api import slack_api
 from common.slack.slack_bot import slack_listener, slack_listener_with_threads
-from common.slack.slack_bot.draft_delivery import prepare_draft_and_send_ephemeral
+from common.slack.slack_bot.react_runner import run_react_and_confirm
 from common.slack.slack_rag import slack_rag
 from common.tools.prompt_scheduler import reload_jobs_from_disk, shutdown_scheduler, start_scheduler
 from config.config import settings, parse_duration_seconds
@@ -27,7 +27,7 @@ def _get_bot_user_id() -> str | None:
 def start():
     app = slack_listener.create_app()
     slack_listener_with_threads.register_tool_confirmation_handlers(app)
-    slack_listener_with_threads.register_draft_revise_handlers(app)
+    slack_listener_with_threads.register_reply_confirmation_handlers(app)
     slack_listener_with_threads.register_copilot_command(app, _handle_copilot)
     slack_listener_with_threads.register_copilot_shortcut(app, _handle_copilot)
     slack_listener_with_threads.register_copilot_app_mention(
@@ -56,7 +56,7 @@ def _handle_copilot(
     copilot_trigger: str | None = None,
     copilot_action: str | None = None,
 ):
-    prepare_draft_and_send_ephemeral(
+    run_react_and_confirm(
         channel_id,
         thread_ts,
         user_id,

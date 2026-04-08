@@ -419,11 +419,9 @@ def register_tool_confirmation_handlers(app: App) -> None:
             instruction, tool_text, include_text,
         )
         channel_name = slack_api.get_channel_prefixed_name(channel_id)
-        from common.slack.slack_bot.draft_delivery import (
-            prepare_draft_and_send_ephemeral,
-        )
+        from common.slack.slack_bot.react_runner import run_react_and_confirm
 
-        prepare_draft_and_send_ephemeral(
+        run_react_and_confirm(
             channel_id,
             thread_ts or "",
             user_id,

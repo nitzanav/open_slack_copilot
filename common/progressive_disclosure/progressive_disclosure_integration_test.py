@@ -48,9 +48,9 @@ class TestEndToEndSkillSelection:
         mock_fetch.return_value = THREAD
 
         with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
-            from core.slack_bot import prepare_draft
+            from core.slack_bot import run_react_loop
             with patch("common.slack.copilot_pipeline.slack_api"):
-                result = prepare_draft("C1", "T1", "U1", "review this")
+                result = run_react_loop("C1", "T1", "U1", "review this")
 
         assert result == "Draft with code review skill"
         draft_prompt = mock_bot_llm.agent_tool_loop.call_args[0][0]

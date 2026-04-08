@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from common.log import log
-from common.tools.draft_context import get_invocation
+from common.tools.react_context import get_invocation
 from config.config import settings
 
 _SCHEDULED_PROMPTS_CONFIG = settings.scheduled_prompts

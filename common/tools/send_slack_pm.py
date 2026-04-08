@@ -2,7 +2,7 @@ import json
 
 from common.slack.slack_api import slack_api
 from common.slack.slack_bot.tool_confirmation import queue_tool_confirmation
-from common.tools.draft_context import get_invocation
+from common.tools.react_context import get_invocation
 
 SEND_SLACK_PM_TOOL = {
     "type": "function",

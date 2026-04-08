@@ -1,4 +1,4 @@
-"""Shared copilot context building and draft generation for Slack."""
+"""Shared copilot context building and ReAct loop for Slack."""
 
 import json
 import re
@@ -12,7 +12,7 @@ from common.progressive_disclosure import progressive_disclosure
 from common.slack.slack_api import slack_api
 from common.slack.slack_rag import slack_rag
 from common.slack.thread_format import format_slack_thread_for_prompt
-from common.tools.draft_context import draft_invocation_context
+from common.tools.react_context import react_invocation_context
 from common.tools.list_usergroup_members import (
     LIST_USERGROUP_MEMBERS_TOOL,
     handle_list_usergroup_members_call,
@@ -86,7 +86,7 @@ def resolve_copilot_slack_context(
     return thread_ts, fetch_thread_messages(channel_id, thread_ts)
 
 
-def prepare_draft(
+def run_react_loop(
     channel_id: str,
     thread_ts: str,
     user_id: str,
@@ -128,7 +128,7 @@ def prepare_draft(
     )
     effective_tools = _resolve_tools(tools, excluded_tools)
     effective_dispatch = tool_dispatch or dispatch_copilot_tool
-    with draft_invocation_context(channel_id, thread_ts, user_id):
+    with react_invocation_context(channel_id, thread_ts, user_id):
         loop_result = llm_client.agent_tool_loop(
             prompt,
             "Produce the draft reply. Use tools only when the user's skills require it.",
