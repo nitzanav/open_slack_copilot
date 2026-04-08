@@ -4,7 +4,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from common.llm.llm_client.llm_client import AgentToolLoopResult
+from common.llm.llm_client.llm_client import AgentToolLoopResult, ToolCallRecord
 
 FIXTURES = Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"
 
@@ -36,10 +36,15 @@ class TestSlashCommandEndToEnd:
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
     @patch("common.slack.copilot_pipeline.llm_client")
+    @patch("common.slack.slack_bot.react_runner.slack_api")
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
-    def test_full_chain(self, mock_slack_api, mock_llm, mock_pd, mock_rag, mock_fetch):
+    def test_full_chain(self, mock_slack_api, mock_react_slack, mock_llm, mock_pd, mock_rag, mock_fetch):
         mock_fetch.return_value = THREAD_3
-        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult("Generated draft reply", [])
+        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult(
+            "",
+            [ToolCallRecord("send_thread_reply", '{"status":"queued","detail":"ok"}')],
+            [],
+        )
         _mock_bot_deps(mock_llm, mock_pd, mock_rag)
 
         from common.slack.slack_bot.slack_listener_with_threads import register_copilot_command
@@ -51,34 +56,29 @@ class TestSlashCommandEndToEnd:
 
         command = {"channel_id": "C1", "user_id": "U1", "text": "reply politely", "thread_ts": "T1"}
 
-        with patch(
-            "common.slack.slack_bot.thread_reply_confirmation.send_reply_confirmation",
-        ) as mock_confirm:
-            registered_fn(ack=MagicMock(), command=command)
+        registered_fn(ack=MagicMock(), command=command)
 
-            mock_llm.agent_tool_loop.assert_called_once()
-            prompt = mock_llm.agent_tool_loop.call_args[0][0]
-            assert "reply politely" in prompt
-            for msg in THREAD_3:
-                assert msg["text"] in prompt
+        mock_llm.agent_tool_loop.assert_called_once()
+        prompt = mock_llm.agent_tool_loop.call_args[0][0]
+        assert "reply politely" in prompt
+        for msg in THREAD_3:
+            assert msg["text"] in prompt
 
-            mock_confirm.assert_called_once_with(
-                "C1",
-                "T1",
-                "U1",
-                "U1",
-                "Generated draft reply",
-                context_kind="thread",
-            )
+        mock_react_slack.send_ephemeral.assert_not_called()
 
     @patch("common.slack.slack_bot.react_runner.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
     @patch("common.slack.copilot_pipeline.llm_client")
+    @patch("common.slack.slack_bot.react_runner.slack_api")
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
-    def test_singleton_thread_end_to_end(self, mock_slack_api, mock_llm, mock_pd, mock_rag, mock_fetch):
+    def test_singleton_thread_end_to_end(self, mock_slack_api, mock_react_slack, mock_llm, mock_pd, mock_rag, mock_fetch):
         mock_fetch.return_value = THREAD_1
-        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult("Singleton draft", [])
+        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult(
+            "",
+            [ToolCallRecord("send_thread_reply", '{"status":"queued"}')],
+            [],
+        )
         _mock_bot_deps(mock_llm, mock_pd, mock_rag)
 
         from common.slack.slack_bot.slack_listener_with_threads import register_copilot_command
@@ -90,18 +90,8 @@ class TestSlashCommandEndToEnd:
 
         command = {"channel_id": "C2", "user_id": "U2", "text": "", "thread_ts": "T2"}
 
-        with patch(
-            "common.slack.slack_bot.thread_reply_confirmation.send_reply_confirmation",
-        ) as mock_confirm:
-            registered_fn(ack=MagicMock(), command=command)
-            mock_confirm.assert_called_once_with(
-                "C2",
-                "T2",
-                "U2",
-                "U2",
-                "Singleton draft",
-                context_kind="thread",
-            )
+        registered_fn(ack=MagicMock(), command=command)
+        mock_react_slack.send_ephemeral.assert_not_called()
 
     def test_thread_enrichment_passes_correct_ts(self):
         from common.slack.slack_bot.slack_listener_with_threads import register_copilot_command

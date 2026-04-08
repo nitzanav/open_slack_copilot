@@ -1,10 +1,6 @@
 import pytest
 
-from common.slack.slack_bot.react_runner import (
-    NO_ACTION_TEXT,
-    _format_failure_message,
-)
-from common.slack.slack_bot.thread_reply_confirmation import ReviseError
+from common.slack.slack_bot.react_runner import ReviseError, _format_failure_message
 
 
 @pytest.mark.parametrize(
@@ -19,10 +15,6 @@ from common.slack.slack_bot.thread_reply_confirmation import ReviseError
 )
 def test_format_failure_message(trigger, action, expected):
     assert _format_failure_message(trigger, action) == expected
-
-
-def test_no_action_constant():
-    assert NO_ACTION_TEXT == "No action taken."
 
 
 def test_resolve_missing_anchor_channel_tail_ok():

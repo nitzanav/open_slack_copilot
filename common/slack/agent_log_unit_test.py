@@ -121,4 +121,4 @@ def test_summarize_fallback_schedule_tool():
         final_text="",
         tool_trace=[ToolCallRecord("schedule_prompt", '{"status":"scheduled"}')],
     )
-    assert "Scheduled" in out or "scheduled" in out
+    assert out == "Tool call: schedule_prompt"

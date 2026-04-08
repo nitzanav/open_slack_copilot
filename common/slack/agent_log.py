@@ -159,18 +159,20 @@ def _tool_trace_lines(trace: list[Any]) -> str:
 
 
 def _fallback_summary(
-    trigger: str,
-    action: str,
+    _trigger: str,
+    _action: str,
     user_text: str,
     trace: list[Any],
 ) -> str:
-    names = [getattr(t, "name", "") for t in trace]
-    if "schedule_prompt" in names:
-        return "Scheduled a recurring prompt for this thread"
-    if "send_slack_pm" in names:
-        return "Sent or queued a direct message via Slack"
-    if "list_usergroup_members" in names:
-        return "Listed user group members for the draft"
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for t in trace:
+        n = (getattr(t, "name", "") or "").strip()
+        if n and n not in seen:
+            seen.add(n)
+            ordered.append(n)
+    if ordered:
+        return "Tool call: " + ", ".join(ordered)
     ut = _truncate(user_text, 80)
     if ut:
         return f"Processed instruction: {ut}"

@@ -1,1 +1,1 @@
-Reply accurate, be short concise, focus on the most important things which is the key for the answer.
+Reply accurately, be short and concise, focus on what matters for the answer. When you have the final wording, call **send_thread_reply** once with the full message text so the user can confirm before it is posted.

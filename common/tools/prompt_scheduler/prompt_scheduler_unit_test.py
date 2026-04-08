@@ -5,6 +5,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from common.llm.llm_client.llm_client import ToolCallRecord
+from common.slack.copilot_pipeline import ReactLoopResult
 from common.tools.prompt_scheduler import prompt_scheduler as sched
 
 
@@ -88,25 +90,22 @@ def test_thread_inaccessible_sends_invite_does_not_remove_job(
     )
 
 
+@patch("common.slack.slack_bot.react_runner.slack_api")
 @patch("common.slack.slack_bot.react_runner.fetch_thread_messages")
 @patch("common.slack.slack_bot.react_runner.run_react_loop")
-@patch("common.slack.slack_bot.thread_reply_confirmation.send_reply_confirmation")
-def test_result_sent_to_scheduling_user(mock_send_confirm, mock_react, mock_fetch, tmp_path, monkeypatch):
+def test_result_sent_to_scheduling_user(mock_react, mock_fetch, mock_slack, tmp_path, monkeypatch):
     monkeypatch.setattr(sched, "scheduled_prompts_root", lambda: tmp_path)
     _write_job(tmp_path, "sched_user", _future_meta())
     mock_fetch.return_value = []
-    mock_react.return_value = "Here is the reply"
+    mock_react.return_value = ReactLoopResult(
+        "",
+        [ToolCallRecord("send_thread_reply", '{"status":"queued"}')],
+        [],
+    )
 
     sched.run_scheduled_prompt("sched_user")
 
-    mock_send_confirm.assert_called_once_with(
-        "C1",
-        "T1",
-        "U1",
-        "U1",
-        "Here is the reply",
-        context_kind="thread",
-    )
+    mock_slack.send_ephemeral.assert_not_called()
 
 
 def test_print_scheduled_prompt_jobs_lists_job(tmp_path, monkeypatch, capsys):

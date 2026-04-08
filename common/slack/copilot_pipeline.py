@@ -2,9 +2,10 @@
 
 import json
 import re
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from common.llm.llm_client import llm_client
 from common.slack import agent_log
@@ -17,6 +18,7 @@ from common.tools.copilot_tool import dispatch_copilot_tool as dispatch_register
 from common.tools.list_usergroup_members import LIST_USERGROUP_MEMBERS_TOOL
 from common.tools.schedule_tool import SCHEDULE_PROMPT_TOOL
 from common.tools.send_slack_pm import SEND_SLACK_PM_TOOL
+from common.tools.send_thread_reply import SEND_THREAD_REPLY_TOOL
 from config.config import settings, parse_duration_seconds
 
 DEFAULT_INSTRUCTION = "Draft a reply to this thread."
@@ -27,8 +29,18 @@ EXAMPLES_PATH = _SLACK_DIR / "example_threads.json"
 _INTERACTIVE_TOOLS = [
     SCHEDULE_PROMPT_TOOL,
     SEND_SLACK_PM_TOOL,
+    SEND_THREAD_REPLY_TOOL,
     LIST_USERGROUP_MEMBERS_TOOL,
 ]
+
+
+@dataclass
+class ReactLoopResult:
+    """Outcome of ``run_react_loop`` (assistant text plus tool trace for callers)."""
+
+    text: str
+    tool_trace: list[Any] = field(default_factory=list)
+    tool_errors: list[str] = field(default_factory=list)
 
 
 def _resolve_tools(
@@ -96,7 +108,9 @@ def run_react_loop(
     thread_messages: list[dict] | None = None,
     copilot_trigger: str | None = None,
     copilot_action: str | None = None,
-) -> str:
+    *,
+    context_kind: str = "thread",
+) -> ReactLoopResult:
     if thread_messages is None:
         thread_messages = fetch_thread_messages(channel_id, thread_ts)
     skills = select_skills(thread_messages, user_text)
@@ -126,14 +140,22 @@ def run_react_loop(
     )
     effective_tools = _resolve_tools(tools, excluded_tools)
     effective_dispatch = tool_dispatch or dispatch_copilot_tool
-    with react_invocation_context(channel_id, thread_ts, user_id):
+    with react_invocation_context(
+        channel_id, thread_ts, user_id, context_kind=context_kind,
+    ):
         loop_result = llm_client.agent_tool_loop(
             prompt,
-            "Produce the draft reply. Use tools only when the user's skills require it.",
+            (
+                "Finish by calling send_thread_reply exactly once with the full message text "
+                "to post in the thread after the user confirms. "
+                "Use schedule_prompt, send_slack_pm, list_usergroup_members, or other tools "
+                "first when the selected skills require them."
+            ),
             effective_tools,
             effective_dispatch,
         )
     draft = loop_result.text
+    raw_tool_errors = list(loop_result.tool_errors)
     if loop_result.tool_errors:
         err_lines = "\n".join(f"• {line}" for line in loop_result.tool_errors)
         draft = f"{draft}\n\n---\n*Tool errors*\n{err_lines}".strip()
@@ -157,7 +179,11 @@ def run_react_loop(
         if tools:
             entry["tools"] = tools
         agent_log.append_entry(entry)
-    return draft
+    return ReactLoopResult(
+        text=draft,
+        tool_trace=list(loop_result.tool_trace),
+        tool_errors=raw_tool_errors,
+    )
 
 
 def dispatch_copilot_tool(name: str, arguments_json: str) -> str:

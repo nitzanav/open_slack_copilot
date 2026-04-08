@@ -22,6 +22,8 @@ Two contexts — follow the matching path.
    - **External status** — e.g. Jira; use the right tool to verify.
 4. **`schedule_prompt`** — **`prompt`:** embed user IDs, completion criteria, how to check each user, and thread/channel refs. **`cron`:** 5-field UTC (hourly, daily, or a specific clock time). **`expires_in_days`:** optional; if omitted, default is **7** days; **maximum 14**. The scheduler stops firing after that (`expires_at` on the job). For follow-ups, pass **`expires_in_days: 14`** unless the thread clearly needs a shorter run.
 
+5. **`send_thread_reply`** — After any setup (`schedule_prompt`, optional acknowledgments in the instruction), finish by calling **`send_thread_reply`** once with the full text the user should post or confirm in the thread. The invoker approves it in Slack (**Revise** / **Confirm**) before it is posted as the bot.
+
    Example (shape of the tool call):
 
    ```
@@ -38,6 +40,7 @@ Two contexts — follow the matching path.
 
 1. **Check each user** — thread context (reactions, replies) vs criteria in the scheduled prompt.
 2. **Remind** — DM if not done: action item + thread link; polite, brief.
+3. **`send_thread_reply`** — If you need to surface a summary or next-step text in the thread, call **`send_thread_reply`** once with that text so the scheduling user can confirm before posting.
 
 ## Tone
 

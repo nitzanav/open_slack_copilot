@@ -1,24 +1,33 @@
-"""Run the copilot ReAct loop and send the reply confirmation ephemeral."""
+"""Run the copilot ReAct loop; thread reply is submitted via send_thread_reply tool confirmation."""
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Callable
 
 from common.log import log
+from common.llm.llm_client.llm_client import ToolCallRecord
 from common.slack.copilot_pipeline import (
+    ReactLoopResult,
     ThreadFetchError,
     fetch_channel_tail_messages,
     fetch_thread_messages,
     run_react_loop,
 )
 from common.slack.slack_api import slack_api
-from common.slack.slack_bot.thread_reply_confirmation import ReviseError
 
 _logger = logging.getLogger(__name__)
 
 CHANNEL_INVITE_EPHEMERAL = "Add me to this channel first. /invite @CoPilot"
-NO_ACTION_TEXT = "No action taken."
+_NO_SUBMIT_MSG = (
+    "The assistant did not call send_thread_reply with the message text. "
+    "Try again or rephrase your instruction."
+)
+
+
+class ReviseError(Exception):
+    """User-visible Revise flow error."""
 
 
 def _format_failure_message(
@@ -47,6 +56,25 @@ def _resolve_thread_messages(
     return fetch_thread_messages(channel_id, anchor)
 
 
+def _trace_has_queued_send_thread_reply(trace: list[ToolCallRecord]) -> bool:
+    for rec in reversed(trace):
+        if (rec.name or "") != "send_thread_reply":
+            continue
+        prev = (rec.result_preview or "").strip()
+        try:
+            obj = json.loads(prev)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict) and obj.get("status") == "queued":
+            return True
+    return False
+
+
+def _format_tool_errors_ephemeral(tool_errors: list[str]) -> str:
+    lines = "\n".join(f"• {line}" for line in tool_errors)
+    return f"*Tool errors*\n{lines}"
+
+
 @log
 def run_react_and_confirm(
     channel_id: str,
@@ -73,7 +101,7 @@ def run_react_and_confirm(
             context_kind,
             thread_messages,
         )
-        reply_text = run_react_loop(
+        loop_out = run_react_loop(
             channel_id,
             thread_ts,
             prepare_user_id,
@@ -85,6 +113,7 @@ def run_react_and_confirm(
             tool_dispatch=tool_dispatch,
             copilot_trigger=copilot_trigger,
             copilot_action=copilot_action,
+            context_kind=context_kind,
         )
     except ThreadFetchError:
         slack_api.send_ephemeral(
@@ -112,17 +141,41 @@ def run_react_and_confirm(
         )
         return
 
-    if not (reply_text or "").strip():
-        reply_text = NO_ACTION_TEXT
-    from common.slack.slack_bot.thread_reply_confirmation import (
-        send_reply_confirmation,
-    )
-
-    send_reply_confirmation(
+    _post_loop_ephemeral(
         channel_id,
         thread_ts,
         recipient_user_id,
-        prepare_user_id,
-        reply_text,
-        context_kind=context_kind,
+        loop_out,
+    )
+
+
+def _post_loop_ephemeral(
+    channel_id: str,
+    thread_ts: str,
+    recipient_user_id: str,
+    loop_out: ReactLoopResult,
+) -> None:
+    queued = _trace_has_queued_send_thread_reply(loop_out.tool_trace)
+    if queued:
+        if loop_out.tool_errors:
+            slack_api.send_ephemeral(
+                channel_id,
+                thread_ts,
+                recipient_user_id,
+                _format_tool_errors_ephemeral(loop_out.tool_errors),
+            )
+        return
+
+    parts: list[str] = [_NO_SUBMIT_MSG]
+    if loop_out.tool_errors:
+        parts.append(_format_tool_errors_ephemeral(loop_out.tool_errors))
+    assistant = (loop_out.text or "").strip()
+    if assistant:
+        excerpt = assistant[:800] + ("…" if len(assistant) > 800 else "")
+        parts.append(f"*Assistant text (not submitted):*\n{excerpt}")
+    slack_api.send_ephemeral(
+        channel_id,
+        thread_ts,
+        recipient_user_id,
+        "\n\n".join(parts),
     )

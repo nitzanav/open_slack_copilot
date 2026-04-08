@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from common.llm.llm_client.llm_client import AgentToolLoopResult
+from common.llm.llm_client.llm_client import AgentToolLoopResult, ToolCallRecord
 
 FIXTURES = Path(__file__).parent.parent / "tests" / "fixtures"
 
@@ -59,10 +59,17 @@ class TestMessageShortcutEndToEnd:
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
     @patch("common.slack.copilot_pipeline.llm_client")
+    @patch("common.slack.slack_bot.react_runner.slack_api")
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
-    def test_shortcut_full_chain_sends_reply(self, mock_slack_api, mock_llm, mock_pd, mock_rag, mock_fetch):
+    def test_shortcut_full_chain_sends_reply(
+        self, mock_slack_api, mock_react_slack, mock_llm, mock_pd, mock_rag, mock_fetch,
+    ):
         mock_fetch.return_value = THREAD_3
-        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult("Generated draft from shortcut", [])
+        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult(
+            "",
+            [ToolCallRecord("send_thread_reply", '{"status":"queued"}')],
+            [],
+        )
         _mock_bot_deps(mock_llm, mock_pd, mock_rag)
 
         from common.slack.slack_bot.slack_listener_with_threads import register_copilot_shortcut
@@ -76,34 +83,31 @@ class TestMessageShortcutEndToEnd:
 
         shortcut = _shortcut_payload(channel_id="C1", user_id="U1")
 
-        with patch(
-            "common.slack.slack_bot.thread_reply_confirmation.send_reply_confirmation",
-        ) as mock_confirm:
-            registered_fn(ack=MagicMock(), shortcut=shortcut, client=MagicMock())
+        registered_fn(ack=MagicMock(), shortcut=shortcut, client=MagicMock())
 
-            mock_fetch.assert_called_once_with("C1", "1516229200.000000")
-            mock_llm.agent_tool_loop.assert_called_once()
-            prompt = mock_llm.agent_tool_loop.call_args[0][0]
-            for msg in THREAD_3:
-                assert msg["text"] in prompt
+        mock_fetch.assert_called_once_with("C1", "1516229200.000000")
+        mock_llm.agent_tool_loop.assert_called_once()
+        prompt = mock_llm.agent_tool_loop.call_args[0][0]
+        for msg in THREAD_3:
+            assert msg["text"] in prompt
 
-            mock_confirm.assert_called_once_with(
-                "C1",
-                "1516229200.000000",
-                "U1",
-                "U1",
-                "Generated draft from shortcut",
-                context_kind="thread",
-            )
+        mock_react_slack.send_ephemeral.assert_not_called()
 
     @patch("common.slack.copilot_pipeline.fetch_channel_tail_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
     @patch("common.slack.copilot_pipeline.llm_client")
+    @patch("common.slack.slack_bot.react_runner.slack_api")
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
-    def test_shortcut_channel_message_uses_message_ts(self, mock_slack_api, mock_llm, mock_pd, mock_rag, mock_tail):
+    def test_shortcut_channel_message_uses_message_ts(
+        self, mock_slack_api, mock_react_slack, mock_llm, mock_pd, mock_rag, mock_tail,
+    ):
         mock_tail.return_value = THREAD_3
-        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult("Draft for channel message", [])
+        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult(
+            "",
+            [ToolCallRecord("send_thread_reply", '{"status":"queued"}')],
+            [],
+        )
         _mock_bot_deps(mock_llm, mock_pd, mock_rag)
 
         from common.slack.slack_bot.slack_listener_with_threads import register_copilot_shortcut
@@ -117,20 +121,10 @@ class TestMessageShortcutEndToEnd:
 
         shortcut = _shortcut_payload(thread_ts=None)
 
-        with patch(
-            "common.slack.slack_bot.thread_reply_confirmation.send_reply_confirmation",
-        ) as mock_confirm:
-            registered_fn(ack=MagicMock(), shortcut=shortcut, client=MagicMock())
+        registered_fn(ack=MagicMock(), shortcut=shortcut, client=MagicMock())
 
-            mock_tail.assert_called_once_with("C1")
-            mock_confirm.assert_called_once_with(
-                "C1",
-                "1516229207.000133",
-                "U1",
-                "U1",
-                "Draft for channel message",
-                context_kind="channel_tail",
-            )
+        mock_tail.assert_called_once_with("C1")
+        mock_react_slack.send_ephemeral.assert_not_called()
 
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
     def test_shortcut_callback_registration(self, mock_slack_api):

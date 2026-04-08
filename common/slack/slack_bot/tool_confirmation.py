@@ -422,13 +422,14 @@ def register_tool_confirmation_handlers(app: App) -> None:
         channel_name = slack_api.get_channel_prefixed_name(channel_id)
         from common.slack.slack_bot.react_runner import run_react_and_confirm
 
+        ctx_kind = str(outer.get("payload", {}).get("context_kind") or "thread")
         run_react_and_confirm(
             channel_id,
             thread_ts or "",
             user_id,
             prepare_uid,
             user_text,
-            context_kind="thread",
+            context_kind=ctx_kind,
             channel_name=channel_name,
             copilot_trigger="tool_confirm_revise",
             copilot_action="confirmation_required_tool",

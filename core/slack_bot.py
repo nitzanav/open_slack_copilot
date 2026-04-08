@@ -6,7 +6,6 @@ from common.slack.copilot_pipeline import (
     get_checkpoint_seconds,
     get_cross_channel_ids,
     load_examples as _load_examples,
-    run_react_loop,
     select_skills as _select_skills,
 )
 from common.slack.slack_api import slack_api
@@ -27,7 +26,6 @@ def _get_bot_user_id() -> str | None:
 def start():
     app = slack_listener.create_app()
     slack_listener_with_threads.register_tool_confirmation_handlers(app)
-    slack_listener_with_threads.register_reply_confirmation_handlers(app)
     slack_listener_with_threads.register_copilot_command(app, _handle_copilot)
     slack_listener_with_threads.register_copilot_shortcut(app, _handle_copilot)
     slack_listener_with_threads.register_copilot_app_mention(

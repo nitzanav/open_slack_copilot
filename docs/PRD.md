@@ -15,9 +15,9 @@
 - **Draft replies** — via message shortcut, @mention, or `/copilot` slash command
   - Uses RAG of the relevant channel + cross-channel RAG
   - Using list of predefined **reply** skills selected via progressive disclosure (same pipeline for shortcut, @mention, and slash command)
-  - **Follow-ups on action items** — example **reply** skill [`skill_examples/reply/follow_up/SKILL.md`](../skill_examples/reply/follow_up/SKILL.md) (install under `~/.open_slack_copilot/skills/reply/follow_up/`); uses `schedule_prompt`, `list_usergroup_members`, `send_slack_pm`. Capability map: [M15](milestones/m15_follow_ups_use_case/m15_follow_ups_use_case.md)
-- **Draft Revise** — refine a generated draft with free-text instructions via a modal
-- **Send DM** — LLM can invoke `send_slack_pm` tool; the requesting user approves/rejects via ephemeral confirmation
+  - **Follow-ups on action items** — example **reply** skill [`skill_examples/reply/follow_up/SKILL.md`](../skill_examples/reply/follow_up/SKILL.md) (install under `~/.open_slack_copilot/skills/reply/follow_up/`); uses `schedule_prompt`, `list_usergroup_members`, `send_slack_pm`, and **`send_thread_reply`** for the visible thread reply. Capability map: [M15](milestones/m15_follow_ups_use_case/m15_follow_ups_use_case.md)
+- **Draft Revise** — for pending thread replies and other confirmed tools: **Revise** opens a modal; submit re-runs the ReAct path with the same Slack context (`context_kind`, thread vs channel tail) via [`tool_confirmation.py`](../common/slack/slack_bot/tool_confirmation.py)
+- **Send DM** — LLM can invoke `send_slack_pm` tool; the requesting user confirms via ephemeral Block Kit (**Revise** + **Confirm**) in the same module as other tools
 - **Scheduled prompts** — LLM can invoke `schedule_prompt` tool to register a cron job that re-runs a prompt on a thread (e.g. follow-up reminders); see [M15](milestones/m15_follow_ups_use_case/m15_follow_ups_use_case.md) for tooling details and remaining gaps (e.g. external status checks)
 
 ### Future / Not Implemented
@@ -52,9 +52,10 @@
 - **Scheduled prompts** — LLM tool `schedule_prompt` with 5-field cron, optional `expires_in_days` (default 7, max 14)
   - Jobs stored on disk at `~/.open_slack_copilot/scheduled_prompts/<job_id>/`
   - Reloaded from disk on restart via APScheduler
-  - Scheduled runs deliver draft ephemerals to the user who created the schedule
+  - Scheduled runs use the same pipeline; the user who created the schedule gets **`send_thread_reply`** confirmation (and other tool ephemerals as needed)
   - Nested scheduling is prevented (`schedule_prompt` tool excluded from scheduled runs)
-- **Send Slack PM** — LLM tool `send_slack_pm`; resolves user, queues DM for requester approval via ephemeral Block Kit (Send / Cancel)
+- **Send Slack PM** — LLM tool `send_slack_pm`; resolves user, queues DM for requester approval via ephemeral Block Kit (**Revise** + **Confirm**)
+- **Send thread reply** — LLM tool `send_thread_reply`; queues the proposed channel/thread message for requester confirmation, then posts as the bot on confirm (`chat.postMessage` in thread)
 - **User group members** — LLM tool `list_usergroup_members`; Slack API `usergroups.list` + `usergroups.users.list` via `slack_api` (requires bot scope `usergroups:read`)
 - **Example threads** — hard-coded file (`common/slack/example_threads.json`) loaded into the system prompt
 
@@ -64,10 +65,10 @@
 - **M1: Slash command (implemented)** — compose response draft
   - [M1.1: thread data and text after slash command](milestones/m1_slash_command/m1_1_thread_draft.md)
     - listen `/copilot` via `slack_listener_with_threads.py` (requires use inside a thread)
-    - `prepare_draft(...)` in `copilot_pipeline.py`:
+    - `run_react_loop` / `run_react_and_confirm` in `copilot_pipeline.py` / `react_runner.py`:
       - Compose system prompt (skills, RAG context, cross-channel RAG, example threads, thread messages, instruction)
-      - Run `agent_tool_loop` with `schedule_prompt`, `send_slack_pm`, and `list_usergroup_members` tools
-      - Send draft as ephemeral with Revise button via `send_draft_ephemeral_with_revise`
+      - Run `agent_tool_loop` with `schedule_prompt`, `send_slack_pm`, `send_thread_reply`, and `list_usergroup_members` tools
+      - Thread reply is submitted via **`send_thread_reply`** → shared tool confirmation ephemeral (**Revise** + **Confirm**)
   - [M1.2: Reply skills](milestones/m1_slash_command/m1_2_reply_skills.md) — add relevant reply skills (progressive disclosure) to the context
   - [M1.3: Channel RAG](milestones/m1_slash_command/m1_3_channel_rag.md) — add to the system prompt relevant messages from current channel via RAG
     - If RAG not ready → initiate build, send ephemeral "Preparing RAG for #X, will update when done"
@@ -75,12 +76,12 @@
     - Add hard-coded file of example threads & answers
   - [M1.4: Cross-channel RAG](milestones/m1_slash_command/m1_4_cross_channel_rag.md) — add to the system prompt relevant messages from configured cross-channels
     - If RAG missing → build on startup for channels in `rag.cross_channel` config
-- **Message shortcut (implemented)** — `draft_with_copilot` message shortcut (three-dot menu → Connect to apps). Resolves context: on a channel root post → recent channel tail (`copilot_channel_context_limit` messages); in a thread → thread messages. Runs the same `prepare_draft` + ephemeral flow. Registered in `slack_listener_with_threads.py`.
-- **App @mention (implemented)** — `@CoPilot` in a channel runs the same draft + ephemeral flow as the message shortcut (optional text after the mention). Context: recent channel messages on a root post, or the thread when the mention is in a thread. Filters out self-mentions and subtyped messages. Registered in `slack_listener_with_threads.py` with `app_mention`; see README.
-- **Draft Revise (implemented)** — Successful drafts are sent as Block Kit ephemerals with a **Revise** button (`common/slack/slack_bot/draft_revise_actions.py`). The user gets a modal with an instruction field (placeholder hint), optional checkbox to include the original draft in the prompt, and submit re-runs `prepare_draft` with the same Slack context (thread vs channel tail) as the original generation. Applies to `/copilot`, shortcut, @mention, and scheduled prompt results. Posting the draft to the channel (as user or bot) is out of scope for this milestone.
-- **DM confirmation (implemented)** — When the LLM invokes `send_slack_pm`, the requesting user gets an ephemeral Block Kit confirmation with Send / Cancel buttons (`common/slack/slack_bot/dm_confirmation.py`).
+- **Message shortcut (implemented)** — `draft_with_copilot` message shortcut (three-dot menu → Connect to apps). Resolves context: on a channel root post → recent channel tail (`copilot_channel_context_limit` messages); in a thread → thread messages. Runs the same `run_react_and_confirm` flow. Registered in `slack_listener_with_threads.py`.
+- **App @mention (implemented)** — `@CoPilot` in a channel runs the same flow as the message shortcut (optional text after the mention). Context: recent channel messages on a root post, or the thread when the mention is in a thread. Filters out self-mentions and subtyped messages. Registered in `slack_listener_with_threads.py` with `app_mention`; see README.
+- **Tool confirmation + Revise (implemented)** — Pending actions (thread reply, DM, etc.) use Block Kit ephemerals with **Revise** + **Confirm** in [`common/slack/slack_bot/tool_confirmation.py`](../common/slack/slack_bot/tool_confirmation.py). Revise opens a modal and re-runs `run_react_and_confirm` with the same `context_kind`. Applies to `/copilot`, shortcut, @mention, and scheduled prompt results. Confirmed thread replies post **as the bot** in the thread.
+- **DM confirmation (implemented)** — When the LLM invokes `send_slack_pm`, the requesting user gets the same tool confirmation UI as other tools (`tool_confirmation.py`).
 - [**M6: Tool - send slack PM (implemented)**](milestones/m6_send_slack_pm/m6_send_slack_pm.md) — `send_slack_pm` LiteLLM tool; resolves user via `slack_api.resolve_user`, queues DM for requester confirmation
-- [**M7: Skill scheduler (implemented)**](milestones/m7_skill_scheduler/m7_skill_scheduler.md) — `schedule_prompt` LiteLLM tool lets the LLM register a cron-based prompt on a thread. Jobs are stored on disk, reloaded on restart. Scheduled runs call `prepare_draft` and send the result as an ephemeral to the user who created the schedule.
+- [**M7: Skill scheduler (implemented)**](milestones/m7_skill_scheduler/m7_skill_scheduler.md) — `schedule_prompt` LiteLLM tool lets the LLM register a cron-based prompt on a thread. Jobs are stored on disk, reloaded on restart. Scheduled runs call `run_react_and_confirm` for the user who created the schedule (same tools except nested `schedule_prompt`).
 
 ### Not Implemented
 

@@ -5,10 +5,10 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from config.config import settings
-from common.llm.llm_client.llm_client import AgentToolLoopResult
-from common.slack.copilot_pipeline import ThreadFetchError
+from common.llm.llm_client.llm_client import AgentToolLoopResult, ToolCallRecord
+from common.slack.copilot_pipeline import ThreadFetchError, run_react_loop
 from core.slack_bot import (
-    compose_system_prompt, run_react_loop, _handle_copilot,
+    compose_system_prompt, _handle_copilot,
     _select_skills, _load_examples, _build_cross_channel_rags,
     _fetch_cross_channel_rag, DEFAULT_INSTRUCTION,
 )
@@ -162,7 +162,7 @@ class TestRunReactLoop:
         settings.set("rag.cross_channel", ["eng"])
         try:
             result = run_react_loop("support", "T1", "U1", "")
-            assert result == "Full draft"
+            assert result.text == "Full draft"
 
             prompt = mock_llm.agent_tool_loop.call_args[0][0]
             assert "channel rag" in prompt
@@ -189,7 +189,7 @@ class TestRunReactLoopPreloadedMessages:
         mock_llm.agent_tool_loop.return_value = AgentToolLoopResult("ok", [])
 
         result = run_react_loop("C", "T1", "U1", "", thread_messages=THREAD_3)
-        assert result == "ok"
+        assert result.text == "ok"
         mock_fetch.assert_not_called()
 
 
@@ -197,28 +197,24 @@ class TestHandleCopilot:
     @patch("common.slack.slack_bot.react_runner.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
-    @patch("common.slack.slack_bot.thread_reply_confirmation.send_reply_confirmation")
     @patch("common.slack.slack_bot.react_runner.slack_api")
     @patch("common.slack.copilot_pipeline.llm_client")
-    def test_reply_sent_as_confirmation(self, mock_llm, mock_slack, mock_send_confirm, mock_pd, mock_rag, mock_fetch):
+    def test_reply_queued_skips_extra_ephemeral(self, mock_llm, mock_slack, mock_pd, mock_rag, mock_fetch):
         mock_pd.select_skills.return_value = []
         mock_pd.get_default_instruction.return_value = "default"
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []
         mock_rag.query_cross_channel.return_value = []
-        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult("Here is my draft", [])
+        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult(
+            "",
+            [ToolCallRecord("send_thread_reply", '{"status":"queued","detail":"ok"}')],
+            [],
+        )
         mock_fetch.return_value = THREAD_3
 
         _handle_copilot("C123", "T123", "U001", "help")
-        mock_send_confirm.assert_called_once_with(
-            "C123",
-            "T123",
-            "U001",
-            "U001",
-            "Here is my draft",
-            context_kind="thread",
-        )
+        mock_slack.send_ephemeral.assert_not_called()
 
     @patch("common.slack.slack_bot.react_runner.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
@@ -255,10 +251,10 @@ class TestHandleCopilot:
     @patch("common.slack.slack_bot.react_runner.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
-    @patch("common.slack.slack_bot.thread_reply_confirmation.send_reply_confirmation")
+    @patch("common.slack.slack_bot.react_runner.slack_api")
     @patch("common.slack.copilot_pipeline.llm_client")
-    def test_empty_reply_sends_no_action_taken(
-        self, mock_llm, mock_send_confirm, mock_pd, mock_rag, mock_fetch,
+    def test_missing_send_thread_reply_sends_ephemeral(
+        self, mock_llm, mock_slack, mock_pd, mock_rag, mock_fetch,
     ):
         mock_pd.select_skills.return_value = []
         mock_pd.get_default_instruction.return_value = "default"
@@ -266,9 +262,9 @@ class TestHandleCopilot:
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []
         mock_rag.query_cross_channel.return_value = []
-        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult("", [])
+        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult("", [], [])
         mock_fetch.return_value = THREAD_3
 
         _handle_copilot("C123", "T123", "U001", "help")
-        mock_send_confirm.assert_called_once()
-        assert mock_send_confirm.call_args[0][4] == "No action taken."
+        mock_slack.send_ephemeral.assert_called_once()
+        assert "send_thread_reply" in mock_slack.send_ephemeral.call_args[0][3]

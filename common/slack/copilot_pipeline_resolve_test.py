@@ -9,6 +9,7 @@ from common.slack.copilot_pipeline import (
 from common.tools.list_usergroup_members import LIST_USERGROUP_MEMBERS_TOOL
 from common.tools.schedule_tool import SCHEDULE_PROMPT_TOOL
 from common.tools.send_slack_pm import SEND_SLACK_PM_TOOL
+from common.tools.send_thread_reply import SEND_THREAD_REPLY_TOOL
 
 
 class TestResolveCopilotSlackContext:
@@ -67,6 +68,7 @@ class TestRunReactLoopExcludedTools:
         tools_passed = mock_llm.agent_tool_loop.call_args[0][2]
         assert SCHEDULE_PROMPT_TOOL not in tools_passed
         assert SEND_SLACK_PM_TOOL in tools_passed
+        assert SEND_THREAD_REPLY_TOOL in tools_passed
         assert LIST_USERGROUP_MEMBERS_TOOL in tools_passed
 
 
@@ -96,7 +98,7 @@ class TestRunReactLoopToolErrorsInOutput:
 
         out = run_react_loop("C", "T1", "U1", "hi")
 
-        assert "Draft body." in out
-        assert "*Tool errors*" in out
-        assert "requester_user_id" in out
-        assert "send_slack_pm:" in out
+        assert "Draft body." in out.text
+        assert "*Tool errors*" in out.text
+        assert "requester_user_id" in out.text
+        assert "send_slack_pm:" in out.text
