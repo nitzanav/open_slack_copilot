@@ -1,6 +1,6 @@
 import json
 
-from common.tools.send_slack_pm import SEND_SLACK_PM_TOOL, handle_send_slack_pm_call
+from common.tools.send_slack_pm import SEND_SLACK_PM, SEND_SLACK_PM_TOOL
 
 
 def test_tool_definition_schema():
@@ -12,6 +12,6 @@ def test_tool_definition_schema():
 
 def test_handle_requires_invocation_context():
     out = json.loads(
-        handle_send_slack_pm_call(json.dumps({"user": "U0123456789", "message": "hi"}))
+        SEND_SLACK_PM.handle(json.dumps({"user": "U0123456789", "message": "hi"}))
     )
     assert "error" in out

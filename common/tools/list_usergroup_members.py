@@ -3,6 +3,7 @@ import json
 from slack_sdk.errors import SlackApiError
 
 from common.slack.slack_api import slack_api
+from common.tools.copilot_tool import CopilotTool, register_copilot_tool
 
 LIST_USERGROUP_MEMBERS_TOOL = {
     "type": "function",
@@ -58,3 +59,12 @@ def handle_list_usergroup_members_call(arguments_json: str) -> str:
         resp = getattr(e, "response", None) or {}
         err = resp.get("error") if isinstance(resp, dict) else None
         return json.dumps({"error": err or str(e)})
+
+
+LIST_USERGROUP_MEMBERS = CopilotTool(
+    name="list_usergroup_members",
+    llm_schema=LIST_USERGROUP_MEMBERS_TOOL,
+    handle=handle_list_usergroup_members_call,
+)
+
+register_copilot_tool(LIST_USERGROUP_MEMBERS)

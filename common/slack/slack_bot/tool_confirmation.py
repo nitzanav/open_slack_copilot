@@ -1,4 +1,4 @@
-"""Generic risky-tool confirmation via Slack Block Kit ephemeral messages."""
+"""User confirmation for tools that require it (Slack Block Kit ephemerals)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,11 @@ from slack_bolt import App
 
 from common.log import log
 from common.slack.slack_api import slack_api
-from common.tools.tool_risk_defs import ToolRiskSpec, get_tool_risk_spec
+from common.tools.copilot_tool import (
+    ToolConfirmationSpec,
+    get_copilot_tool,
+    get_tool_confirmation_spec,
+)
 from config.config import settings
 
 _SLACK_BOT_CONFIG = settings.slack_bot
@@ -86,7 +90,7 @@ def _message_body_blocks(text: str) -> list[dict]:
     ]
 
 
-def _extra_params_section(spec: ToolRiskSpec, payload: dict[str, Any]) -> list[dict]:
+def _extra_params_section(spec: ToolConfirmationSpec, payload: dict[str, Any]) -> list[dict]:
     keys = spec.extra_param_keys_to_display
     if not keys:
         return []
@@ -104,7 +108,10 @@ def _extra_params_section(spec: ToolRiskSpec, payload: dict[str, Any]) -> list[d
 
 
 def _build_confirmation_blocks(
-    spec: ToolRiskSpec, text_content: str, payload: dict[str, Any]
+    tool_name: str,
+    spec: ToolConfirmationSpec,
+    text_content: str,
+    payload: dict[str, Any],
 ) -> list[dict]:
     body = _message_body_blocks(text_content)
     return [
@@ -115,7 +122,7 @@ def _build_confirmation_blocks(
         },
         *_extra_params_section(spec, payload),
         *body,
-        _actions_block(spec.tool_name, payload),
+        _actions_block(tool_name, payload),
     ]
 
 
@@ -268,7 +275,7 @@ def queue_tool_confirmation(
     thread_ts: str | None,
     requester_user_id: str,
 ) -> str:
-    spec = get_tool_risk_spec(tool_name)
+    spec = get_tool_confirmation_spec(tool_name)
     if not spec:
         return f"Error: unknown tool {tool_name!r} for confirmation."
     if not spec.requires_confirmation:
@@ -279,7 +286,7 @@ def queue_tool_confirmation(
             "Error: requester_user_id is required to show confirmation."
         )
     try:
-        blocks = _build_confirmation_blocks(spec, text_content, payload)
+        blocks = _build_confirmation_blocks(tool_name, spec, text_content, payload)
     except ValueError as e:
         return f"Error: {e}"
     slack_api.send_ephemeral_blocks(
@@ -302,7 +309,7 @@ def handle_confirm_action(body: dict) -> str:
     if meta.get("v") != 1:
         return "Could not process this confirmation."
     tool_name = str(meta.get("tool_name") or "")
-    spec = get_tool_risk_spec(tool_name)
+    spec = get_tool_confirmation_spec(tool_name)
     if not spec:
         return "Unknown tool."
     blocks = body.get("message", {}).get("blocks") or []
@@ -317,16 +324,10 @@ def handle_confirm_action(body: dict) -> str:
 
 
 def _execute_confirmed_tool(tool_name: str, text: str, payload: dict[str, Any]) -> str:
-    if tool_name == "send_slack_pm":
-        uid = (payload.get("target_user_id") or "").strip()
-        if not uid:
-            return "Missing recipient for this action."
-        try:
-            slack_api.send_dm(uid, text)
-        except Exception as e:
-            return f"Failed to send: {e}"
-        return "Sent."
-    return f"Not implemented: {tool_name}"
+    tool = get_copilot_tool(tool_name)
+    if not tool or not tool.execute_after_confirm:
+        return f"Not implemented: {tool_name}"
+    return tool.execute_after_confirm(text, payload)
 
 
 @log
@@ -335,7 +336,7 @@ def handle_revise_open_modal(body: dict, client) -> None:
         action = (body.get("actions") or [{}])[0]
         meta = _parse_revise_metadata(action.get("value") or "")
         tool_name = str(meta.get("tool_name") or "")
-        spec = get_tool_risk_spec(tool_name)
+        spec = get_tool_confirmation_spec(tool_name)
         if not spec:
             raise ValueError("Unknown tool.")
         blocks = body.get("message", {}).get("blocks") or []
@@ -381,7 +382,7 @@ def register_tool_confirmation_handlers(app: App) -> None:
             )
             return
         tool_name = str(outer.get("tool_name") or "")
-        spec = get_tool_risk_spec(tool_name)
+        spec = get_tool_confirmation_spec(tool_name)
         if not spec:
             ack(
                 response_action="errors",
@@ -430,5 +431,5 @@ def register_tool_confirmation_handlers(app: App) -> None:
             context_kind="thread",
             channel_name=channel_name,
             copilot_trigger="tool_confirm_revise",
-            copilot_action="risky_tool",
+            copilot_action="confirmation_required_tool",
         )

@@ -2,11 +2,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+import common.tools.send_slack_pm  # noqa: F401 — registers tool + confirmation spec
 from common.slack.slack_bot import tool_confirmation as tc
+from common.tools.copilot_tool import ToolConfirmationSpec, get_tool_confirmation_spec
 
 
 def _sample_blocks(text: str, payload: dict | None = None) -> list[dict]:
-    spec = tc.get_tool_risk_spec("send_slack_pm")
+    spec = get_tool_confirmation_spec("send_slack_pm")
     assert spec is not None
     p = payload or {
         "target_user_id": "U_TARGET",
@@ -14,12 +16,12 @@ def _sample_blocks(text: str, payload: dict | None = None) -> list[dict]:
         "thread_ts": "1.0",
         "prepare_user_id": "U_PREP",
     }
-    return tc._build_confirmation_blocks(spec, text, p)
+    return tc._build_confirmation_blocks("send_slack_pm", spec, text, p)
 
 
 def test_parse_text_single_chunk():
     blocks = _sample_blocks("hello world")
-    spec = tc.get_tool_risk_spec("send_slack_pm")
+    spec = get_tool_confirmation_spec("send_slack_pm")
     assert spec is not None
     msg = tc.parse_text_from_confirmation_blocks(blocks, spec.text_param_key)
     assert msg == "hello world"
@@ -28,18 +30,20 @@ def test_parse_text_single_chunk():
 def test_parse_text_multichunk():
     long_text = "x" * 4500
     blocks = _sample_blocks(long_text)
-    spec = tc.get_tool_risk_spec("send_slack_pm")
+    spec = get_tool_confirmation_spec("send_slack_pm")
     assert spec is not None
     msg = tc.parse_text_from_confirmation_blocks(blocks, spec.text_param_key)
     assert msg == long_text
 
 
 def test_build_blocks_rejects_overflow():
-    spec = tc.get_tool_risk_spec("send_slack_pm")
+    spec = get_tool_confirmation_spec("send_slack_pm")
     assert spec is not None
     too_long = "m" * (tc._MAX_BODY_BLOCKS * tc._PLAIN_CHUNK + 1)
     with pytest.raises(ValueError, match="too long"):
-        tc._build_confirmation_blocks(spec, too_long, {"target_user_id": "U1"})
+        tc._build_confirmation_blocks(
+            "send_slack_pm", spec, too_long, {"target_user_id": "U1"}
+        )
 
 
 def test_handle_confirm_action_parses_and_sends():
@@ -60,7 +64,7 @@ def test_handle_confirm_action_parses_and_sends():
         "actions": [{"value": confirm_value}],
         "message": {"blocks": blocks, "thread_ts": "1.0"},
     }
-    with patch("common.slack.slack_bot.tool_confirmation.slack_api") as api:
+    with patch("common.tools.send_slack_pm.slack_api") as api:
         result = tc.handle_confirm_action(body)
         assert result == "Sent."
         api.send_dm.assert_called_once_with("U_RECIPIENT", "body text")
@@ -80,17 +84,14 @@ def test_queue_tool_confirmation_requires_requester():
 
 
 def test_extra_params_section_in_blocks():
-    from common.tools.tool_risk_defs import ToolRiskSpec
-
-    spec = ToolRiskSpec(
-        tool_name="fake_tool",
+    spec = ToolConfirmationSpec(
         text_param_key="body",
         ephemeral_notification_text="x",
         confirmation_header_markdown="*Hdr*",
         extra_param_keys_to_display=("issue_key",),
     )
     blocks = tc._build_confirmation_blocks(
-        spec, "hello", {"issue_key": "FOO-1", "body": "hello"}
+        "fake_tool", spec, "hello", {"issue_key": "FOO-1", "body": "hello"}
     )
     extra = next(b for b in blocks if b.get("block_id") == "tool_confirm_extra_params")
     assert "FOO-1" in (extra.get("text") or {}).get("text", "")

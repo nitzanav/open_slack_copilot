@@ -1,13 +1,17 @@
 import json
+from typing import Any
 
 from common.slack.slack_api import slack_api
 from common.slack.slack_bot.tool_confirmation import queue_tool_confirmation
+from common.tools.copilot_tool import CopilotTool, ToolConfirmationSpec, register_copilot_tool
 from common.tools.react_context import get_invocation
+
+_TOOL_NAME = "send_slack_pm"
 
 SEND_SLACK_PM_TOOL = {
     "type": "function",
     "function": {
-        "name": "send_slack_pm",
+        "name": _TOOL_NAME,
         "description": (
             "Queue a direct message to a workspace member. "
             "The requesting user confirms the message in Slack before it is sent."
@@ -38,7 +42,7 @@ def _require_str(args: dict, key: str) -> str:
     return val
 
 
-def handle_send_slack_pm_call(arguments_json: str) -> str:
+def _invoke(arguments_json: str) -> str:
     try:
         args = json.loads(arguments_json or "{}")
         user, message = _require_str(args, "user"), _require_str(args, "message")
@@ -48,7 +52,7 @@ def handle_send_slack_pm_call(arguments_json: str) -> str:
         return json.dumps({"error": str(e)})
 
     result = queue_tool_confirmation(
-        tool_name="send_slack_pm",
+        tool_name=_TOOL_NAME,
         text_content=message,
         payload={
             "target_user_id": uid,
@@ -63,6 +67,35 @@ def handle_send_slack_pm_call(arguments_json: str) -> str:
     if result.startswith("Error:"):
         return json.dumps({"error": result})
     return json.dumps({"status": "queued", "detail": result})
+
+
+def _execute_after_confirm(text: str, payload: dict[str, Any]) -> str:
+    uid = (payload.get("target_user_id") or "").strip()
+    if not uid:
+        return "Missing recipient for this action."
+    try:
+        slack_api.send_dm(uid, text)
+    except Exception as e:
+        return f"Failed to send: {e}"
+    return "Sent."
+
+
+SEND_SLACK_PM = CopilotTool(
+    name=_TOOL_NAME,
+    llm_schema=SEND_SLACK_PM_TOOL,
+    handle=_invoke,
+    confirmation=ToolConfirmationSpec(
+        text_param_key="message",
+        ephemeral_notification_text="Confirm pending action",
+        confirmation_header_markdown=(
+            "*Direct message*\n"
+            "This will be sent as a private Slack message to the selected member."
+        ),
+    ),
+    execute_after_confirm=_execute_after_confirm,
+)
+
+register_copilot_tool(SEND_SLACK_PM)
 
 
 def _resolve_target_user(user: str) -> str:

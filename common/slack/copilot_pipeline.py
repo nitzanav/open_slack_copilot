@@ -13,12 +13,10 @@ from common.slack.slack_api import slack_api
 from common.slack.slack_rag import slack_rag
 from common.slack.thread_format import format_slack_thread_for_prompt
 from common.tools.react_context import react_invocation_context
-from common.tools.list_usergroup_members import (
-    LIST_USERGROUP_MEMBERS_TOOL,
-    handle_list_usergroup_members_call,
-)
-from common.tools.schedule_tool import SCHEDULE_PROMPT_TOOL, handle_schedule_prompt_call
-from common.tools.send_slack_pm import SEND_SLACK_PM_TOOL, handle_send_slack_pm_call
+from common.tools.copilot_tool import dispatch_copilot_tool as dispatch_registered_copilot_tool
+from common.tools.list_usergroup_members import LIST_USERGROUP_MEMBERS_TOOL
+from common.tools.schedule_tool import SCHEDULE_PROMPT_TOOL
+from common.tools.send_slack_pm import SEND_SLACK_PM_TOOL
 from config.config import settings, parse_duration_seconds
 
 DEFAULT_INSTRUCTION = "Draft a reply to this thread."
@@ -163,12 +161,9 @@ def run_react_loop(
 
 
 def dispatch_copilot_tool(name: str, arguments_json: str) -> str:
-    if name == "schedule_prompt":
-        return handle_schedule_prompt_call(arguments_json)
-    if name == "send_slack_pm":
-        return handle_send_slack_pm_call(arguments_json)
-    if name == "list_usergroup_members":
-        return handle_list_usergroup_members_call(arguments_json)
+    out = dispatch_registered_copilot_tool(name, arguments_json)
+    if out is not None:
+        return out
     return '{"error": "unknown tool"}'
 
 

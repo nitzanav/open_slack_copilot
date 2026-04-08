@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from common.log import log
+from common.tools.copilot_tool import CopilotTool, register_copilot_tool
 from common.tools.react_context import get_invocation
 from config.config import settings
 
@@ -120,3 +121,12 @@ def _write_job_to_disk(
         "expires_at": (now + timedelta(days=expires_in)).isoformat().replace("+00:00", "Z"),
     }
     (job_dir / "metadata.json").write_text(json.dumps(meta, indent=2))
+
+
+SCHEDULE_PROMPT = CopilotTool(
+    name="schedule_prompt",
+    llm_schema=SCHEDULE_PROMPT_TOOL,
+    handle=handle_schedule_prompt_call,
+)
+
+register_copilot_tool(SCHEDULE_PROMPT)
