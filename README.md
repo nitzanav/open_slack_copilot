@@ -219,6 +219,16 @@ Only needed if you want CoPilot to **send messages on your behalf** (e.g. post a
 
 4. Open `http://127.0.0.1:8765/slack/oauth/start` in your browser and complete the Slack consent. The user token is persisted at `~/.open_slack_copilot/slack_user_oauth/<user_id>.json` and picked up automatically by the bot.
 
+### Alternative: pre-configured owner user token
+
+For single-user/dev setups you can skip the OAuth callback flow entirely by setting your own Slack User OAuth Token in `.env`:
+
+```
+SLACK_USER_TOKEN=xoxp-...          # OAuth & Permissions → User OAuth Token
+```
+
+The owner's Slack `user_id` is resolved automatically via `auth.test` on first use and cached. When `send_*_on_behalf_of_requester` runs for that user and no OAuth-callback token is saved, this token is used. A saved OAuth token (from the callback flow) always takes precedence. Read directly from the env var — no `default.yaml` wiring needed.
+
 ---
 
 ## Define Skills
