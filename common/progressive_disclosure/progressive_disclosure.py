@@ -3,6 +3,8 @@ from pathlib import Path
 
 from common.log import log
 from common.llm.llm_client import llm_client
+from common.skill_runs import skill_runs
+from common.skill_thumbs_up import skill_thumbs_up
 
 SKILLS_ROOT = Path.home() / ".open_slack_copilot" / "skills"
 _SKILL_KINDS = ("reply", "watcher")
@@ -82,8 +84,25 @@ def _skill_entries_for_kind(kind: str) -> list[tuple[str, str]]:
     out: list[tuple[str, str]] = []
     for d in base.iterdir():
         if d.is_dir() and (d / "SKILL.md").is_file():
-            out.append((f"{kind}/{d.name}", (d / "SKILL.md").read_text().strip()))
+            ref = f"{kind}/{d.name}"
+            skill_text = (d / "SKILL.md").read_text().strip()
+            out.append((ref, _with_examples(ref, skill_text)))
     return out
+
+
+def _with_examples(skill_id: str, skill_text: str) -> str:
+    refs = skill_thumbs_up.recent_references(skill_id, limit=20)
+    if not refs:
+        return skill_text
+    rendered: list[str] = []
+    for r in refs:
+        key = skill_runs._row_key(r.get("thread_ts", ""), r.get("action_ts", ""))
+        row = skill_runs.get(key)
+        if row:
+            rendered.append(skill_runs.format_as_example(row))
+    if not rendered:
+        return skill_text
+    return f"{skill_text}\n\n## Examples (recent good runs)\n\n" + "\n\n".join(rendered)
 
 
 def _parse_selection(response: str, valid_titles: list[str]) -> list[str]:

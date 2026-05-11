@@ -7,6 +7,8 @@ import pytest
 from common.progressive_disclosure.progressive_disclosure import (
     select_skills, select_single_skill, _skill_entries_for_kind, _parse_selection,
 )
+from common.skill_runs import skill_runs
+from common.skill_thumbs_up import skill_thumbs_up
 
 FIXTURES = Path(__file__).parent.parent.parent / "tests" / "fixtures"
 
@@ -208,3 +210,36 @@ class TestSelectSingleSkill:
         with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
             picked = select_single_skill("reply", THREAD, "")
             assert picked == ("reply/only_one", "Only one.")
+
+
+class TestExamplesInjection:
+    def test_appends_examples_section_when_thumbs_up_present(self, tmp_path):
+        skills_root = tmp_path / "skills"
+        (skills_root / "reply" / "foo").mkdir(parents=True)
+        (skills_root / "reply" / "foo" / "SKILL.md").write_text("Be foo.")
+        from config.config import settings
+        settings.set("data_layer.root", str(tmp_path / "data"))
+        with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", skills_root), \
+             patch("common.skill_thumbs_up.skill_thumbs_up.SKILLS_ROOT", skills_root):
+            skill_runs.init_run(
+                skill_id="reply/foo", channel_id="C1", thread_ts="T1",
+                action_ts="A1", requester_user_id="U1",
+                tool_name="send_dm_as_app", payload={"user_text": "draft"},
+                text="Hello world.",
+            )
+            skill_thumbs_up.add_reference("reply/foo", "T1", "A1")
+            entries = _skill_entries_for_kind("reply")
+            assert len(entries) == 1
+            _, text = entries[0]
+            assert "Be foo." in text
+            assert "## Examples (recent good runs)" in text
+            assert "Hello world." in text
+
+    def test_no_examples_section_when_no_thumbs_up(self, tmp_path):
+        skills_root = tmp_path / "skills"
+        (skills_root / "reply" / "foo").mkdir(parents=True)
+        (skills_root / "reply" / "foo" / "SKILL.md").write_text("Be foo.")
+        with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", skills_root), \
+             patch("common.skill_thumbs_up.skill_thumbs_up.SKILLS_ROOT", skills_root):
+            entries = _skill_entries_for_kind("reply")
+            assert entries[0][1] == "Be foo."
