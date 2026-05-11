@@ -1,6 +1,10 @@
 - [planning] thumb up, thumbs down => add to skill examples
 - Summarize thread into fields in CSV and then Jira
-  - Skill: When it seems that the Summarize thread, 
+  - Skill: When it seems that the ticket was closed and not action items, suggest to activate skill of thread closure.
+    - Store the thread data result using the thread data extraction tool with attributes of problem, and solution.
+    - 
+    - Summarize the thread with: problem: ..., solution and send thread message with the summary
+    - 
 - built-in seed skills and installation process to copy the skills with confirmation if the skills folder is not empty
 - watch the save later
 - summarize skill
