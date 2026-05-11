@@ -1,11 +1,21 @@
 from unittest.mock import patch
 
-from common.llm.llm_client.llm_client import AgentToolLoopResult
+import pytest
+
+from common.llm.llm_client.llm_client import AgentToolLoopResult, ToolCallRecord
+from common.skill_runs import skill_runs
 from common.slack.copilot_pipeline import (
     run_react_loop,
     resolve_copilot_slack_context,
     ThreadFetchError,
 )
+
+
+@pytest.fixture
+def isolated_data_root(tmp_path):
+    from config.config import settings
+    settings.set("data_layer.root", str(tmp_path))
+    yield tmp_path
 from common.tools.list_usergroup_members import LIST_USERGROUP_MEMBERS_TOOL
 from common.tools.list_users import LIST_USERS_TOOL
 from common.tools.schedule_tool import SCHEDULE_PROMPT_TOOL
@@ -138,3 +148,52 @@ class TestRunReactLoopToolErrorsInOutput:
         assert "*Tool errors*" in out.text
         assert "requester_user_id" in out.text
         assert "send_dm_as_app:" in out.text
+
+
+class TestRunReactLoopEnrichesSkillRunsRow:
+    @patch("common.slack.copilot_pipeline.fetch_thread_messages")
+    @patch("common.slack.copilot_pipeline.slack_rag")
+    @patch("common.slack.copilot_pipeline.progressive_disclosure")
+    @patch("common.slack.copilot_pipeline.llm_client")
+    @patch("common.slack.copilot_pipeline.slack_api")
+    def test_enriches_existing_row_with_run_log(
+        self, mock_slack, mock_llm, mock_pd, mock_rag, mock_fetch, isolated_data_root,
+    ):
+        mock_pd.select_single_skill.return_value = ("reply/x", "x")
+        mock_rag.is_ready.return_value = True
+        mock_rag.query_channel.return_value = []
+        mock_rag.missing_channels.return_value = []
+        mock_rag.query_cross_channel.return_value = []
+        mock_fetch.return_value = [{"user": "U1", "text": "msg"}]
+
+        captured_action_ts: list[str] = []
+
+        def fake_agent_tool_loop(*_args, **_kw):
+            from common.tools.react_context import get_invocation
+            inv = get_invocation() or {}
+            captured_action_ts.append(str(inv.get("action_ts") or ""))
+            ts = inv.get("thread_ts") or ""
+            at = inv.get("action_ts") or ""
+            sid = inv.get("skill_id")
+            skill_runs.init_run(
+                skill_id=sid, channel_id=inv["channel_id"], thread_ts=ts,
+                action_ts=at, requester_user_id=inv["user_id"],
+                tool_name="send_dm_as_app", payload={"target_user_id": "U2"},
+                text="draft body",
+            )
+            return AgentToolLoopResult(
+                "ok",
+                [ToolCallRecord("send_dm_as_app", '{"status":"tool_confirmation_requested"}')],
+                [],
+            )
+
+        mock_llm.agent_tool_loop.side_effect = fake_agent_tool_loop
+
+        run_react_loop("C", "T1", "U_PREP", "hi")
+
+        key = skill_runs._row_key("T1", captured_action_ts[0])
+        row = skill_runs.get(key)
+        assert row is not None
+        assert row["run_log"]["final_text"]
+        names = [t["name"] for t in row["run_log"]["tool_trace"]]
+        assert "send_dm_as_app" in names

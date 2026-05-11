@@ -11,6 +11,7 @@ from common.llm.llm_client import llm_client
 from common.llm.llm_apis.types import AgentEventNotifier
 from common.slack import agent_log
 from common.progressive_disclosure import progressive_disclosure
+from common.skill_runs import skill_runs
 from common.slack import copilot_user_notify
 from common.slack.slack_api import slack_api
 from common.slack.slack_rag import slack_rag
@@ -195,6 +196,9 @@ def run_react_loop(
     if loop_result.tool_errors:
         err_lines = "\n".join(f"• {line}" for line in loop_result.tool_errors)
         draft = f"{draft}\n\n---\n*Tool errors*\n{err_lines}".strip()
+    _enrich_skill_runs_row(
+        thread_ts, action_ts, thread_messages, loop_result, draft,
+    )
     if copilot_trigger is not None and copilot_action is not None:
         summary = agent_log.summarize_copilot_run(
             trigger=copilot_trigger,
@@ -220,6 +224,32 @@ def run_react_loop(
         tool_trace=list(loop_result.tool_trace),
         tool_errors=raw_tool_errors,
     )
+
+
+def _enrich_skill_runs_row(
+    thread_ts: str,
+    action_ts: str,
+    thread_messages: list[dict],
+    loop_result,
+    final_text: str,
+) -> None:
+    """Persist the run log onto the matching skill_runs row if one was written."""
+    try:
+        key = skill_runs._row_key(thread_ts, action_ts)
+        if skill_runs.get(key) is None:
+            return
+        run_log = {
+            "tool_trace": agent_log.tool_trace_for_record(loop_result.tool_trace),
+            "tool_errors": list(loop_result.tool_errors),
+            "final_text": final_text,
+            "thread_excerpt": [
+                {"user": m.get("user", ""), "text": m.get("text", "")}
+                for m in thread_messages[-10:]
+            ],
+        }
+        skill_runs.enrich_with_run_log(key, run_log)
+    except Exception:
+        pass
 
 
 def _notify_skill_selection(
