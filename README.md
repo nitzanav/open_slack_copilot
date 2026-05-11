@@ -230,13 +230,14 @@ Skills are freeform markdown instructions that guide the bot's reply behavior. T
 ~/.open_slack_copilot/
   skills/
     reply/
-      default.md            # optional — overrides the built-in default instruction
+      draft_thread_reply/   # default skill (install from skill_examples/)
+        SKILL.md
       <skill_name>/
         SKILL.md
 ```
 
-- **Default skill** — To override the built-in default reply instruction, create `~/.open_slack_copilot/skills/reply/default.md` with your own markdown. When no skill matches a thread, this file is used instead of the [bundled default](common/progressive_disclosure/default_reply_instruction.md).
-- **Additional skills** — Add folders under `~/.open_slack_copilot/skills/reply/`. Each folder contains a `SKILL.md` file. The bot uses progressive disclosure to automatically select relevant skills per thread (including on **`@CoPilot`**, the message shortcut, and **`/copilot`**).
+- **Default skill** — Install the bundled [`draft_thread_reply`](skill_examples/reply/draft_thread_reply/SKILL.md) skill under `~/.open_slack_copilot/skills/reply/draft_thread_reply/` so the bot always has at least one skill to pick.
+- **Additional skills** — Add folders under `~/.open_slack_copilot/skills/reply/`. Each folder contains a `SKILL.md` file. Each run picks exactly one skill via progressive disclosure (a candidate stage followed by a single-pick stage) on **`@CoPilot`**, the message shortcut, and **`/copilot`**.
 
 For examples of useful skills, see [`docs/examples/`](docs/examples/) and the **Follow Up** reply skill at [`skill_examples/reply/follow_up/SKILL.md`](skill_examples/reply/follow_up/SKILL.md).
 

@@ -27,7 +27,7 @@ class TestEndToEndSkillSelection:
         with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
             from common.progressive_disclosure.progressive_disclosure import select_skills
             result = select_skills("reply", THREAD, "")
-            assert result == ["Be warm and professional."]
+            assert result == [("reply/polite_reply", "Be warm and professional.")]
 
     @patch("common.slack.copilot_pipeline.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")

@@ -29,6 +29,7 @@ def _resolve_tools(
     -
     - Summarize the thread with: problem: ..., solution and send thread message with the summary
     -
+
 - built-in seed skills and installation process to copy the skills with confirmation if the skills folder is not empty
 - watch the save later
 - summarize skill

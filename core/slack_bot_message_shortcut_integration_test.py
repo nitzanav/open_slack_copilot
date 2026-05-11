@@ -34,8 +34,7 @@ THREAD_3 = _load_fixture("fixture_thread_3_messages.json")
 
 
 def _mock_bot_deps(mock_llm, mock_pd, mock_rag):
-    mock_pd.select_skills.return_value = []
-    mock_pd.get_default_instruction.return_value = "default"
+    mock_pd.select_single_skill.return_value = ("reply/default", "default")
     mock_rag.is_ready.return_value = True
     mock_rag.query_channel.return_value = []
     mock_rag.missing_channels.return_value = []
