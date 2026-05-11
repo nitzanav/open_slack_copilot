@@ -16,6 +16,7 @@ A Slack copilot that drafts replies, manages scheduled prompts, and sends DMs on
 - **Send DM** — LLM tool `send_dm_as_app`; requesting user approves/rejects via ephemeral (tool confirmation). `send_dm_on_behalf_of_requester` (user OAuth) is defined but not registered yet.
 - **Scheduled prompts** — LLM tool `schedule_prompt`; cron-based, stored on disk, reloaded on restart
 - **Saved skills** — reusable behaviors in `~/.open_slack_copilot/skills/` (**reply** skills drive `/copilot`, shortcut, and @mention drafts; **watcher** kind exists for future M4 channel watch, not wired yet)
+- **Skill thumbs-up learning** — every run picks exactly one skill (two-stage selection); tool-confirmation ephemerals expose a 👍 button. Clicked runs are appended to `<skill_dir>/thumbs_up.json` and rendered as inline examples in that skill's disclosure on subsequent runs. The run snapshot (tool_name, payload, text, run_log) lives in the `skill_runs` data_layer collection.
 
 ## Key Implementation Details
 

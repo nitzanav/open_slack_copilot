@@ -1,4 +1,4 @@
-- [planning] thumb up, thumbs down => add to skill examples
+- thumbs down (negative learning) — thumbs up is implemented and persists thumbed-up runs as skill examples
 - Summarize thread into fields in CSV and then Jira
   - Skill: When it seems that the ticket was closed and not action items, suggest to activate skill of thread closure.
     - Store the thread data result using the thread data extraction tool with attributes of problem, and solution.
