@@ -9,7 +9,7 @@ from common.llm.llm_client.llm_client import AgentToolLoopResult, ToolCallRecord
 from common.slack.copilot_pipeline import ThreadFetchError, run_react_loop
 from core.slack_bot import (
     compose_system_prompt, _handle_copilot,
-    _select_skills, _load_examples, _build_cross_channel_rags,
+    _load_examples, _build_cross_channel_rags,
     _fetch_cross_channel_rag, DEFAULT_INSTRUCTION,
 )
 
@@ -81,19 +81,6 @@ class TestComposeSystemPrompt:
         assert prompt.index("Example Replies") < prompt.index("## Thread")
         assert prompt.index("## Thread") < prompt.index("## Instruction")
 
-class TestSelectSkills:
-    @patch("common.slack.copilot_pipeline.progressive_disclosure")
-    def test_returns_skills_when_matched(self, mock_pd):
-        mock_pd.select_skills.return_value = ["Be polite."]
-        assert _select_skills(THREAD_3, "") == ["Be polite."]
-
-    @patch("common.slack.copilot_pipeline.progressive_disclosure")
-    def test_falls_back_to_default(self, mock_pd):
-        mock_pd.select_skills.return_value = []
-        mock_pd.get_default_instruction.return_value = "Default"
-        assert _select_skills(THREAD_3, "") == ["Default"]
-
-
 class TestLoadExamples:
     def test_loads_example_threads(self):
         examples = _load_examples()
@@ -146,8 +133,7 @@ class TestRunReactLoop:
     def test_full_react_loop_with_cross_channel(
         self, mock_slack, mock_llm, mock_pd, mock_rag, mock_fetch,
     ):
-        mock_pd.select_skills.return_value = []
-        mock_pd.get_default_instruction.return_value = "default"
+        mock_pd.select_single_skill.return_value = ("reply/default", "default")
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = [{"text": "channel rag"}]
         mock_rag.missing_channels.return_value = []
@@ -179,8 +165,7 @@ class TestRunReactLoopPreloadedMessages:
     def test_skips_fetch_when_thread_messages_provided(
         self, mock_slack, mock_llm, mock_pd, mock_rag, mock_fetch,
     ):
-        mock_pd.select_skills.return_value = []
-        mock_pd.get_default_instruction.return_value = "default"
+        mock_pd.select_single_skill.return_value = ("reply/default", "default")
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []
@@ -201,8 +186,7 @@ class TestHandleCopilot:
     def test_reply_confirmation_requested_skips_extra_ephemeral(
         self, mock_llm, mock_notify, mock_pd, mock_rag, mock_fetch,
     ):
-        mock_pd.select_skills.return_value = []
-        mock_pd.get_default_instruction.return_value = "default"
+        mock_pd.select_single_skill.return_value = ("reply/default", "default")
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []
@@ -229,8 +213,7 @@ class TestHandleCopilot:
     @patch("common.slack.slack_bot.react_runner.copilot_user_notify")
     @patch("common.slack.copilot_pipeline.llm_client")
     def test_llm_error_sends_error_ephemeral(self, mock_llm, mock_notify, mock_pd, mock_rag, mock_fetch):
-        mock_pd.select_skills.return_value = []
-        mock_pd.get_default_instruction.return_value = "default"
+        mock_pd.select_single_skill.return_value = ("reply/default", "default")
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []
@@ -263,8 +246,7 @@ class TestHandleCopilot:
     def test_missing_send_thread_reply_on_behalf_of_requester_sends_ephemeral(
         self, mock_llm, mock_notify, mock_pd, mock_rag, mock_fetch,
     ):
-        mock_pd.select_skills.return_value = []
-        mock_pd.get_default_instruction.return_value = "default"
+        mock_pd.select_single_skill.return_value = ("reply/default", "default")
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []

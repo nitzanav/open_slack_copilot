@@ -6,7 +6,6 @@ from common.slack.copilot_pipeline import (
     get_checkpoint_seconds,
     get_cross_channel_ids,
     load_examples as _load_examples,
-    select_skills as _select_skills,
 )
 from common.slack.slack_api import slack_api
 from common.slack.slack_bot import slack_listener, slack_listener_with_threads

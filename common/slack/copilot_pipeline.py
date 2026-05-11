@@ -122,7 +122,15 @@ def run_react_loop(
 ) -> ReactLoopResult:
     if thread_messages is None:
         thread_messages = fetch_thread_messages(channel_id, thread_ts)
-    skills = select_skills(thread_messages, user_text)
+    picked = progressive_disclosure.select_single_skill("reply", thread_messages, user_text)
+    if picked is not None:
+        skill_id, skill_text = picked
+        _notify_skill_selection(channel_id, thread_ts, user_id, skill_id)
+        skills = [skill_text]
+    else:
+        skill_id = None
+        skills = []
+    action_ts = datetime.now(timezone.utc).isoformat()
     thread_text = _thread_messages_text(thread_messages)
     rag_results = fetch_rag_context(channel_id, thread_ts, user_id, thread_messages)
     cross_rag_results = fetch_cross_channel_rag(
@@ -166,7 +174,10 @@ def run_react_loop(
     if bot_uid:
         tool_extra += f" Never mention `<@{bot_uid}>` in tool messages — that id is this app."
     with react_invocation_context(
-        channel_id, thread_ts, user_id, context_kind=context_kind,
+        channel_id, thread_ts, user_id,
+        context_kind=context_kind,
+        skill_id=skill_id,
+        action_ts=action_ts,
     ):
         loop_result = llm_client.agent_tool_loop(
             prompt,
@@ -205,6 +216,17 @@ def run_react_loop(
         tool_trace=list(loop_result.tool_trace),
         tool_errors=raw_tool_errors,
     )
+
+
+def _notify_skill_selection(
+    channel_id: str, thread_ts: str, user_id: str, skill_id: str,
+) -> None:
+    try:
+        copilot_user_notify.notify_progress(
+            channel_id, thread_ts, user_id, f"Selected skill: `{skill_id}`",
+        )
+    except Exception:
+        pass
 
 
 def dispatch_copilot_tool(name: str, arguments_json: str) -> str:
@@ -322,13 +344,6 @@ def _format_thread_for_prompt(
 # ---------------------------------------------------------------------------
 # Context fetching helpers
 # ---------------------------------------------------------------------------
-
-def select_skills(thread_messages: list[dict], user_text: str) -> list[str]:
-    skills = progressive_disclosure.select_skills("reply", thread_messages, user_text)
-    if not skills:
-        return [progressive_disclosure.get_default_instruction()]
-    return skills
-
 
 def fetch_rag_context(
     channel_id: str,

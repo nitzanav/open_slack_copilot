@@ -1,5 +1,6 @@
-- thumb up, thumbs down => add to skill examples
+- [planning] thumb up, thumbs down => add to skill examples
 - built-in seed skills and installation process to copy the skills with confirmation if the skills folder is not empty
+- watch the save later
 - summarize skill
 - search something in slack. default search in current channel, tool to search in channels with from, with and dste range, and sorting. tool to search names of channels to be used before running this search. then tool to get thread data. the tool loop should do the rest
 - evals

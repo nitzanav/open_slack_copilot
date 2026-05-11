@@ -6,8 +6,6 @@ from common.llm.llm_client import llm_client
 
 SKILLS_ROOT = Path.home() / ".open_slack_copilot" / "skills"
 _SKILL_KINDS = ("reply", "watcher")
-_BUNDLED_DEFAULT_INSTRUCTION = (Path(__file__).parent / "default_reply_instruction.md").read_text().strip()
-USER_DEFAULT_INSTRUCTION_PATH = Path.home() / ".open_slack_copilot" / "skills" / "reply" / "default.md"
 
 SELECTION_PROMPT = (
     "You are selecting relevant skills for drafting a Slack reply.\n"
@@ -19,9 +17,20 @@ SELECTION_PROMPT = (
     "Return ONLY a JSON array, e.g. [\"reply/polite_reply\", \"watcher/checklist\"]"
 )
 
+SINGLE_SELECTION_PROMPT = (
+    "Choose exactly ONE skill to drive this Slack copilot run.\n"
+    "Pick the single most relevant skill id from the candidates below.\n"
+    "Return ONLY the skill id (e.g. reply/polite_reply), no quotes, no extra text.\n\n"
+    "Candidates:\n{skill_list}\n\n"
+    "Thread context:\n{thread_context}"
+)
+
 
 @log
-def select_skills(skill_type: str, thread_messages: list[dict], user_text: str) -> list[str]:
+def select_skills(
+    skill_type: str, thread_messages: list[dict], user_text: str,
+) -> list[tuple[str, str]]:
+    """Stage 1: candidate skills matching the thread. Returns (id, text) pairs."""
     entries = _skill_entries_for_kind(skill_type)
     if not entries:
         return []
@@ -33,13 +42,35 @@ def select_skills(skill_type: str, thread_messages: list[dict], user_text: str) 
     response = llm_client.generate(prompt)
     valid_refs = [ref for ref, _ in entries]
     selected_refs = _parse_selection(response, valid_refs)
-    return [text for ref, text in entries if ref in selected_refs]
+    by_ref = dict(entries)
+    return [(ref, by_ref[ref]) for ref in selected_refs if ref in by_ref]
 
 
-def get_default_instruction() -> str:
-    if USER_DEFAULT_INSTRUCTION_PATH.is_file():
-        return USER_DEFAULT_INSTRUCTION_PATH.read_text().strip()
-    return _BUNDLED_DEFAULT_INSTRUCTION
+@log
+def select_single_skill(
+    skill_type: str, thread_messages: list[dict], user_text: str,
+) -> tuple[str, str] | None:
+    """Stage 2: pick exactly one skill (LLM call). Returns (id, text) or None if none installed."""
+    candidates = select_skills(skill_type, thread_messages, user_text)
+    if not candidates:
+        candidates = _skill_entries_for_kind(skill_type)
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+
+    thread_context = _summarize_context(thread_messages, user_text)
+    skill_list = "\n".join(f"- {ref}" for ref, _ in candidates)
+    prompt = SINGLE_SELECTION_PROMPT.format(
+        skill_list=skill_list, thread_context=thread_context,
+    )
+    valid_refs = [ref for ref, _ in candidates]
+    response = (llm_client.generate(prompt) or "").strip()
+    picked_id = _parse_single_selection(response, valid_refs)
+    by_ref = dict(candidates)
+    if picked_id and picked_id in by_ref:
+        return picked_id, by_ref[picked_id]
+    return candidates[0]
 
 
 def _skill_entries_for_kind(kind: str) -> list[tuple[str, str]]:
@@ -63,6 +94,16 @@ def _parse_selection(response: str, valid_titles: list[str]) -> list[str]:
         return [s for s in selected if s in valid_titles]
     except (ValueError, json.JSONDecodeError):
         return []
+
+
+def _parse_single_selection(response: str, valid_refs: list[str]) -> str | None:
+    text = (response or "").strip().strip("`\"' \n")
+    if text in valid_refs:
+        return text
+    for ref in valid_refs:
+        if ref in text:
+            return ref
+    return None
 
 
 def _summarize_context(thread_messages: list[dict], user_text: str) -> str:

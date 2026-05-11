@@ -5,8 +5,7 @@ from unittest.mock import patch
 import pytest
 
 from common.progressive_disclosure.progressive_disclosure import (
-    select_skills, get_default_instruction, _skill_entries_for_kind, _parse_selection,
-    _BUNDLED_DEFAULT_INSTRUCTION,
+    select_skills, select_single_skill, _skill_entries_for_kind, _parse_selection,
 )
 
 FIXTURES = Path(__file__).parent.parent.parent / "tests" / "fixtures"
@@ -73,7 +72,7 @@ class TestParseSelection:
 
 class TestSelectSkills:
     @patch("common.progressive_disclosure.progressive_disclosure.llm_client")
-    def test_select_single_skill(self, mock_llm, tmp_path):
+    def test_select_single_match(self, mock_llm, tmp_path):
         skill_dir = tmp_path / "reply"
         skill_dir.mkdir()
         (skill_dir / "polite_reply").mkdir()
@@ -83,7 +82,7 @@ class TestSelectSkills:
 
         with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
             result = select_skills("reply", THREAD, "")
-            assert result == ["Be polite."]
+            assert result == [("reply/polite_reply", "Be polite.")]
             mock_llm.generate.assert_called_once()
 
     @patch("common.progressive_disclosure.progressive_disclosure.llm_client")
@@ -98,7 +97,8 @@ class TestSelectSkills:
 
         with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
             result = select_skills("reply", THREAD, "")
-            assert set(result) == {"Skill A", "Skill B"}
+            texts = {text for _, text in result}
+            assert texts == {"Skill A", "Skill B"}
 
     @patch("common.progressive_disclosure.progressive_disclosure.llm_client")
     def test_does_not_include_watcher_skills_in_reply(self, mock_llm, tmp_path):
@@ -115,7 +115,7 @@ class TestSelectSkills:
 
         with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
             result = select_skills("reply", THREAD, "")
-            assert result == ["Reply skill"]
+            assert result == [("reply/r1", "Reply skill")]
             prompt = mock_llm.generate.call_args[0][0]
             assert "watcher/w1" not in prompt
 
@@ -148,22 +148,63 @@ class TestSelectSkills:
             assert result == []
 
 
-class TestGetDefaultInstruction:
-    def test_returns_bundled_when_no_user_override(self, tmp_path):
-        missing = tmp_path / "no_such_file.md"
-        with patch("common.progressive_disclosure.progressive_disclosure.USER_DEFAULT_INSTRUCTION_PATH", missing):
-            result = get_default_instruction()
-            assert result == _BUNDLED_DEFAULT_INSTRUCTION
-            assert len(result) > 0
+class TestSelectSingleSkill:
+    @patch("common.progressive_disclosure.progressive_disclosure.llm_client")
+    def test_returns_none_when_no_skills_installed(self, mock_llm, tmp_path):
+        with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
+            assert select_single_skill("reply", THREAD, "") is None
+            mock_llm.generate.assert_not_called()
 
-    def test_user_override_takes_precedence(self, tmp_path):
-        override = tmp_path / "default.md"
-        override.write_text("  Custom user instruction  \n")
-        with patch("common.progressive_disclosure.progressive_disclosure.USER_DEFAULT_INSTRUCTION_PATH", override):
-            assert get_default_instruction() == "Custom user instruction"
+    @patch("common.progressive_disclosure.progressive_disclosure.llm_client")
+    def test_single_installed_skill_no_stage2_call(self, mock_llm, tmp_path):
+        reply = tmp_path / "reply"
+        reply.mkdir()
+        (reply / "only_one").mkdir()
+        (reply / "only_one" / "SKILL.md").write_text("Only one.")
+        mock_llm.generate.return_value = '["reply/only_one"]'
+        with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
+            picked = select_single_skill("reply", THREAD, "")
+            assert picked == ("reply/only_one", "Only one.")
+            assert mock_llm.generate.call_count == 1
 
-    def test_user_override_ignores_directory(self, tmp_path):
-        dir_path = tmp_path / "default.md"
-        dir_path.mkdir()
-        with patch("common.progressive_disclosure.progressive_disclosure.USER_DEFAULT_INSTRUCTION_PATH", dir_path):
-            assert get_default_instruction() == _BUNDLED_DEFAULT_INSTRUCTION
+    @patch("common.progressive_disclosure.progressive_disclosure.llm_client")
+    def test_stage2_picks_valid_id(self, mock_llm, tmp_path):
+        reply = tmp_path / "reply"
+        reply.mkdir()
+        for name, content in [("sk_a", "A"), ("sk_b", "B")]:
+            (reply / name).mkdir()
+            (reply / name / "SKILL.md").write_text(content)
+        mock_llm.generate.side_effect = [
+            '["reply/sk_a", "reply/sk_b"]',
+            "reply/sk_b",
+        ]
+        with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
+            picked = select_single_skill("reply", THREAD, "")
+            assert picked == ("reply/sk_b", "B")
+
+    @patch("common.progressive_disclosure.progressive_disclosure.llm_client")
+    def test_stage2_parse_failure_falls_back_to_first(self, mock_llm, tmp_path):
+        reply = tmp_path / "reply"
+        reply.mkdir()
+        for name, content in [("sk_a", "A"), ("sk_b", "B")]:
+            (reply / name).mkdir()
+            (reply / name / "SKILL.md").write_text(content)
+        mock_llm.generate.side_effect = [
+            '["reply/sk_a", "reply/sk_b"]',
+            "garbage output not a skill id",
+        ]
+        with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
+            picked = select_single_skill("reply", THREAD, "")
+            assert picked is not None
+            assert picked[0] in {"reply/sk_a", "reply/sk_b"}
+
+    @patch("common.progressive_disclosure.progressive_disclosure.llm_client")
+    def test_no_stage1_match_uses_all_installed(self, mock_llm, tmp_path):
+        reply = tmp_path / "reply"
+        reply.mkdir()
+        (reply / "only_one").mkdir()
+        (reply / "only_one" / "SKILL.md").write_text("Only one.")
+        mock_llm.generate.return_value = "[]"
+        with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
+            picked = select_single_skill("reply", THREAD, "")
+            assert picked == ("reply/only_one", "Only one.")

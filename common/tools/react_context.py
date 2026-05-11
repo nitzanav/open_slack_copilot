@@ -6,7 +6,7 @@ _invocation: ContextVar[dict | None] = ContextVar("copilot_invocation", default=
 
 
 class react_invocation_context:
-    """Holds channel_id, thread_ts, user_id, context_kind for tool handlers."""
+    """Holds channel_id, thread_ts, user_id, context_kind, skill_id, action_ts for tool handlers."""
 
     def __init__(
         self,
@@ -15,12 +15,16 @@ class react_invocation_context:
         user_id: str,
         *,
         context_kind: str = "thread",
+        skill_id: str | None = None,
+        action_ts: str | None = None,
     ):
         self._data = {
             "channel_id": channel_id,
             "thread_ts": thread_ts,
             "user_id": user_id,
             "context_kind": (context_kind or "thread").strip() or "thread",
+            "skill_id": (skill_id or "").strip() or None,
+            "action_ts": (action_ts or "").strip() or None,
         }
         self._token = None
 

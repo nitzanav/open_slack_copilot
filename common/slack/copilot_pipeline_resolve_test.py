@@ -56,8 +56,7 @@ class TestRunReactLoopExcludedTools:
     def test_excluded_tools_omit_schedule_keep_others(
         self, mock_slack, mock_llm, mock_pd, mock_rag, mock_fetch,
     ):
-        mock_pd.select_skills.return_value = []
-        mock_pd.get_default_instruction.return_value = "default"
+        mock_pd.select_single_skill.return_value = ("reply/default", "default")
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []
@@ -85,8 +84,7 @@ class TestRunReactLoopExcludedTools:
     def test_both_thread_reply_tools_always_exposed(
         self, mock_slack, mock_llm, mock_pd, mock_rag, mock_fetch,
     ):
-        mock_pd.select_skills.return_value = []
-        mock_pd.get_default_instruction.return_value = "default"
+        mock_pd.select_single_skill.return_value = ("reply/default", "default")
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []
@@ -118,8 +116,7 @@ class TestRunReactLoopToolErrorsInOutput:
     def test_appends_tool_errors_to_output_text(
         self, mock_slack, mock_llm, mock_pd, mock_rag, mock_fetch,
     ):
-        mock_pd.select_skills.return_value = []
-        mock_pd.get_default_instruction.return_value = "default"
+        mock_pd.select_single_skill.return_value = ("reply/default", "default")
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []
