@@ -1,9 +1,19 @@
 from unittest.mock import patch
 
+import pytest
+
 import common.tools.send_thread_reply_on_behalf_of_requester  # noqa: F401 — registers tool
+from common.skill_runs import skill_runs
 from common.slack.slack_api.errors import OAuthNotConnectedError
 from common.slack.slack_bot import tool_confirmation as tc
 from common.tools.copilot_tool import get_copilot_tool, get_tool_confirmation_spec
+
+
+@pytest.fixture
+def isolated_data_root(tmp_path):
+    from config.config import settings
+    settings.set("data_layer.root", str(tmp_path))
+    yield tmp_path
 
 
 def test_tool_registered():
@@ -51,27 +61,24 @@ def test_execute_after_confirm_oauth_missing_message():
     assert "No OAuth" in out
 
 
-def test_handle_confirm_action_send_thread_reply_on_behalf_of_requester():
-    spec = get_tool_confirmation_spec("send_thread_reply_on_behalf_of_requester")
-    assert spec is not None
+def test_handle_confirm_action_send_thread_reply_on_behalf_of_requester(isolated_data_root):
     payload = {
         "channel_id": "C1",
         "thread_ts": "9.0",
         "prepare_user_id": "U_PREP",
         "context_kind": "thread",
     }
-    blocks = tc._build_confirmation_blocks(
-        "send_thread_reply_on_behalf_of_requester", spec, "body text", payload,
-    )
-    actions = blocks[-1]["elements"]
-    confirm_value = next(
-        e["value"] for e in actions if e["action_id"] == tc.ACTION_TOOL_CONFIRM
+    key = skill_runs.init_run(
+        skill_id="reply/x", channel_id="C1", thread_ts="9.0",
+        action_ts="A1", requester_user_id="U_PREP",
+        tool_name="send_thread_reply_on_behalf_of_requester",
+        payload=payload, text="body text",
     )
     body = {
         "user": {"id": "U_CLICKER"},
         "channel": {"id": "C1"},
-        "actions": [{"value": confirm_value}],
-        "message": {"blocks": blocks, "thread_ts": "9.0"},
+        "actions": [{"value": key}],
+        "message": {},
     }
     with patch(
         "common.tools.send_thread_reply_on_behalf_of_requester.slack_api"

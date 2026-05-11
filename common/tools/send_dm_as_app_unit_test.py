@@ -1,9 +1,19 @@
 from unittest.mock import patch
 
+import pytest
+
 import common.tools.send_dm_as_app  # noqa: F401 — registers tool
+from common.skill_runs import skill_runs
 from common.slack.slack_bot import tool_confirmation as tc
 from common.tools.copilot_tool import get_copilot_tool, get_tool_confirmation_spec
 from common.tools.send_dm_as_app import SEND_DM_AS_APP, SEND_DM_AS_APP_TOOL
+
+
+@pytest.fixture
+def isolated_data_root(tmp_path):
+    from config.config import settings
+    settings.set("data_layer.root", str(tmp_path))
+    yield tmp_path
 
 
 def test_tool_definition_schema():
@@ -35,9 +45,7 @@ def test_execute_after_confirm_sends():
     api.send_dm.assert_called_once_with("U_T", "body")
 
 
-def test_handle_confirm_action_send_dm_as_app():
-    spec = get_tool_confirmation_spec("send_dm_as_app")
-    assert spec is not None
+def test_handle_confirm_action_send_dm_as_app(isolated_data_root):
     payload = {
         "target_user_id": "U_T",
         "channel_id": "C1",
@@ -45,18 +53,16 @@ def test_handle_confirm_action_send_dm_as_app():
         "prepare_user_id": "U_PREP",
         "context_kind": "thread",
     }
-    blocks = tc._build_confirmation_blocks(
-        "send_dm_as_app", spec, "hi", payload,
-    )
-    actions = blocks[-1]["elements"]
-    confirm_value = next(
-        e["value"] for e in actions if e["action_id"] == tc.ACTION_TOOL_CONFIRM
+    key = skill_runs.init_run(
+        skill_id="reply/x", channel_id="C1", thread_ts="9.0",
+        action_ts="A1", requester_user_id="U_PREP",
+        tool_name="send_dm_as_app", payload=payload, text="hi",
     )
     body = {
         "user": {"id": "U_CLICKER"},
         "channel": {"id": "C1"},
-        "actions": [{"value": confirm_value}],
-        "message": {"blocks": blocks, "thread_ts": "9.0"},
+        "actions": [{"value": key}],
+        "message": {},
     }
     with patch("common.tools.send_dm_as_app.slack_api") as api:
         result = tc.handle_confirm_action(body)
