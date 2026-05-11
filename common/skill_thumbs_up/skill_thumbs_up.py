@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from common.progressive_disclosure.progressive_disclosure import SKILLS_ROOT
+SKILLS_ROOT = Path.home() / ".open_slack_copilot" / "skills"
 
 THUMBS_UP_FILENAME = "thumbs_up.json"
 _MAX_KEPT = 200
