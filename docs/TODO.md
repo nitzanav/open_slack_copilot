@@ -1,4 +1,6 @@
 - [planning] thumb up, thumbs down => add to skill examples
+- Summarize thread into fields in CSV and then Jira
+  - Skill: When it seems that the Summarize thread, 
 - built-in seed skills and installation process to copy the skills with confirmation if the skills folder is not empty
 - watch the save later
 - summarize skill

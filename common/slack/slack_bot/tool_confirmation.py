@@ -1,16 +1,21 @@
-"""User confirmation for tools that require it (Slack Block Kit ephemerals)."""
+"""User confirmation for tools that require it (Slack Block Kit ephemerals).
+
+A `skill_runs` row (in the `data_layer` collection) is the source of truth for
+each pending confirmation. Slack buttons carry only the row key
+(`<thread_ts>__<action_ts>`); the row holds the tool name, payload, draft text
+and (after the loop finishes) the full run_log used for thumbs-up examples.
+"""
 
 from __future__ import annotations
 
 import json
-import uuid
 from typing import Any
-
-from common.cache import DEFAULT_CACHE_DIR
 
 from slack_bolt import App
 
 from common.log import log
+from common.skill_runs import skill_runs
+from common.skill_thumbs_up import skill_thumbs_up
 from common.slack import copilot_user_notify
 from common.slack.slack_api import slack_api
 from common.tools.copilot_tool import (
@@ -18,21 +23,20 @@ from common.tools.copilot_tool import (
     get_copilot_tool,
     get_tool_confirmation_spec,
 )
+from common.tools.react_context import get_invocation
 from config.config import settings
 
 _SLACK_BOT_CONFIG = settings.slack_bot
 _PLAIN_CHUNK = _SLACK_BOT_CONFIG.get("block_kit_plain_text_chunk", 3000)
 _MAX_BODY_BLOCKS = _SLACK_BOT_CONFIG.get("block_kit_max_body_blocks", 48)
 _BUTTON_VALUE_LIMIT = _SLACK_BOT_CONFIG.get("button_value_limit", 2000)
-_PRIVATE_METADATA_LIMIT = _SLACK_BOT_CONFIG.get("private_metadata_limit", 3000)
-
-_TOOL_CONFIRM_DRAFT_DIR = DEFAULT_CACHE_DIR / "tool_confirm_drafts"
 
 BLOCK_HEADER = "tool_confirm_header"
 BLOCK_BODY_PREFIX = "tool_confirm_body_"
 BLOCK_ACTIONS = "tool_confirm_actions"
 ACTION_TOOL_CONFIRM = "tool_confirm_action"
 ACTION_TOOL_REVISE = "tool_confirm_revise"
+ACTION_TOOL_THUMBS_UP = "tool_confirm_thumbs_up"
 CALLBACK_TOOL_CONFIRM_REVISE_MODAL = "tool_confirm_revise_modal"
 BLOCK_REVISE_INPUT = "tool_confirm_revise_input"
 ACTION_REVISE_TEXT = "tool_confirm_revise_text"
@@ -46,31 +50,6 @@ _INCLUDE_TEXT_OPTION = {
     },
     "value": "include",
 }
-
-
-def _save_draft(text: str) -> str:
-    """Write draft text to disk, return the reference key."""
-    ref = uuid.uuid4().hex
-    _TOOL_CONFIRM_DRAFT_DIR.mkdir(parents=True, exist_ok=True)
-    (_TOOL_CONFIRM_DRAFT_DIR / f"{ref}.txt").write_text(text, encoding="utf-8")
-    return ref
-
-
-def _load_draft(ref: str) -> str | None:
-    """Read draft text from disk by reference key."""
-    try:
-        return (_TOOL_CONFIRM_DRAFT_DIR / f"{ref}.txt").read_text(encoding="utf-8")
-    except OSError:
-        return None
-
-
-def _resolve_confirmation_tool_text(meta: dict[str, Any]) -> str:
-    ref = meta.get("draft_ref")
-    if ref:
-        text = _load_draft(str(ref))
-        if text is not None:
-            return text
-    raise ValueError("Could not read text from this confirmation.")
 
 
 def _message_body_blocks(text: str) -> list[dict]:
@@ -117,6 +96,7 @@ def _build_confirmation_blocks(
     spec: ToolConfirmationSpec,
     text_content: str,
     payload: dict[str, Any],
+    row_key: str,
 ) -> list[dict]:
     body = _message_body_blocks(text_content)
     return [
@@ -127,42 +107,13 @@ def _build_confirmation_blocks(
         },
         *_extra_params_section(spec, payload),
         *body,
-        _actions_block(tool_name, spec, payload, text_content),
+        _actions_block(spec, row_key),
     ]
 
 
-def _compact_revise_metadata(meta: dict[str, Any]) -> str:
-    combined = json.dumps(meta, separators=(",", ":"))
-    if len(combined) <= _BUTTON_VALUE_LIMIT:
-        return combined
-    payload = meta.get("payload")
-    if isinstance(payload, dict):
-        trimmed = {**meta, "payload": dict(payload)}
-        for k, v in list(trimmed["payload"].items()):
-            if isinstance(v, str) and len(v) > 500:
-                trimmed["payload"][k] = v[:500] + "..."
-        combined = json.dumps(trimmed, separators=(",", ":"))
-        if len(combined) <= _BUTTON_VALUE_LIMIT:
-            return combined
-    raise ValueError("Confirmation context is too large for Revise.")
-
-
-def _actions_block(
-    tool_name: str,
-    spec: ToolConfirmationSpec,
-    payload: dict[str, Any],
-    draft_text: str,
-) -> dict:
-    meta = {
-        "v": 1,
-        "tool_name": tool_name,
-        "payload": payload,
-        "draft_ref": _save_draft(draft_text),
-    }
-    revise_value = _compact_revise_metadata(meta)
-    confirm_raw = json.dumps(meta, separators=(",", ":"))
-    if len(confirm_raw) > _BUTTON_VALUE_LIMIT:
-        raise ValueError("Confirmation context is too large for the send button.")
+def _actions_block(spec: ToolConfirmationSpec, row_key: str) -> dict:
+    if len(row_key) > _BUTTON_VALUE_LIMIT:
+        raise ValueError("Confirmation row key too long for Slack button value.")
     return {
         "type": "actions",
         "block_id": BLOCK_ACTIONS,
@@ -171,29 +122,28 @@ def _actions_block(
                 "type": "button",
                 "text": {"type": "plain_text", "text": "Revise"},
                 "action_id": ACTION_TOOL_REVISE,
-                "value": revise_value,
+                "value": row_key,
             },
             {
                 "type": "button",
                 "text": {"type": "plain_text", "text": spec.confirm_button_text},
                 "style": "primary",
                 "action_id": ACTION_TOOL_CONFIRM,
-                "value": confirm_raw,
+                "value": row_key,
+            },
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "\U0001f44d", "emoji": True},
+                "action_id": ACTION_TOOL_THUMBS_UP,
+                "value": row_key,
+                "accessibility_label": "This was helpful",
             },
         ],
     }
 
 
-def _parse_revise_metadata(raw: str) -> dict[str, Any]:
-    if not raw or not str(raw).strip():
-        raise ValueError("Missing confirmation context.")
-    try:
-        meta = json.loads(raw)
-    except json.JSONDecodeError as e:
-        raise ValueError("Invalid confirmation context.") from e
-    if meta.get("v") != 1 or not meta.get("tool_name"):
-        raise ValueError("Invalid confirmation context.")
-    return meta
+def _row_key_from_actions(body: dict) -> str:
+    return (body.get("actions") or [{}])[0].get("value") or ""
 
 
 def _ephemeral_thread_ts(body: dict) -> str | None:
@@ -213,23 +163,11 @@ def _reply_ephemeral_from_action(body: dict, text: str) -> None:
     copilot_user_notify.notify_user_text(channel_id, thread_ts, user_id, text)
 
 
-def _build_private_metadata(metadata_json: str, tool_text: str) -> str:
-    meta = json.loads(metadata_json)
-    meta["tool_text"] = tool_text
-    combined = json.dumps(meta, separators=(",", ":"))
-    if len(combined) <= _PRIVATE_METADATA_LIMIT:
-        return combined
-    overhead = len(json.dumps({**meta, "tool_text": ""}, separators=(",", ":")))
-    max_t = _PRIVATE_METADATA_LIMIT - overhead - 3
-    meta["tool_text"] = tool_text[:max_t] + "..."
-    return json.dumps(meta, separators=(",", ":"))
-
-
-def _build_tool_revise_modal_view(tool_text: str, metadata_json: str) -> dict[str, Any]:
+def _build_tool_revise_modal_view(row_key: str) -> dict[str, Any]:
     return {
         "type": "modal",
         "callback_id": CALLBACK_TOOL_CONFIRM_REVISE_MODAL,
-        "private_metadata": _build_private_metadata(metadata_json, tool_text),
+        "private_metadata": row_key,
         "title": {"type": "plain_text", "text": "Revise action", "emoji": True},
         "submit": {"type": "plain_text", "text": "Submit", "emoji": True},
         "close": {"type": "plain_text", "text": "Cancel", "emoji": True},
@@ -298,11 +236,25 @@ def queue_tool_confirmation(
         return "Error: this tool does not use confirmation."
     recipient = (requester_user_id or "").strip()
     if not recipient:
-        return (
-            "Error: requester_user_id is required to show confirmation."
-        )
+        return "Error: requester_user_id is required to show confirmation."
+
+    inv = get_invocation() or {}
+    action_ts = (inv.get("action_ts") or "").strip()
+    if not action_ts:
+        return "Error: missing action_ts in invocation context."
+    skill_id = inv.get("skill_id")
+    row_key = skill_runs.init_run(
+        skill_id=skill_id,
+        channel_id=channel_id,
+        thread_ts=thread_ts or "",
+        action_ts=action_ts,
+        requester_user_id=recipient,
+        tool_name=tool_name,
+        payload=payload,
+        text=text_content,
+    )
     try:
-        blocks = _build_confirmation_blocks(tool_name, spec, text_content, payload)
+        blocks = _build_confirmation_blocks(tool_name, spec, text_content, payload, row_key)
     except ValueError as e:
         return f"Error: {e}"
     copilot_user_notify.notify_confirmation_blocks(
@@ -317,22 +269,18 @@ def queue_tool_confirmation(
 
 @log
 def handle_confirm_action(body: dict) -> str:
-    raw = (body.get("actions") or [{}])[0].get("value") or ""
-    try:
-        meta = json.loads(raw)
-    except json.JSONDecodeError:
+    row_key = _row_key_from_actions(body)
+    if not row_key:
         return "Could not process this confirmation."
-    if meta.get("v") != 1:
-        return "Could not process this confirmation."
-    tool_name = str(meta.get("tool_name") or "")
+    row = skill_runs.get(row_key)
+    if not row:
+        return "This confirmation has expired."
+    tool_name = str(row.get("tool_name") or "")
     spec = get_tool_confirmation_spec(tool_name)
     if not spec:
         return "Unknown tool."
-    try:
-        text = _resolve_confirmation_tool_text(meta)
-    except ValueError as e:
-        return str(e)
-    payload = meta.get("payload")
+    text = str(row.get("text") or "")
+    payload = row.get("payload")
     if not isinstance(payload, dict):
         payload = {}
     return _execute_confirmed_tool(tool_name, text, payload)
@@ -348,17 +296,17 @@ def _execute_confirmed_tool(tool_name: str, text: str, payload: dict[str, Any]) 
 @log
 def handle_revise_open_modal(body: dict, client) -> None:
     try:
-        action = (body.get("actions") or [{}])[0]
-        meta = _parse_revise_metadata(action.get("value") or "")
-        tool_name = str(meta.get("tool_name") or "")
+        row_key = _row_key_from_actions(body)
+        if not row_key:
+            raise ValueError("Missing confirmation context.")
+        row = skill_runs.get(row_key)
+        if not row:
+            raise ValueError("This confirmation has expired.")
+        tool_name = str(row.get("tool_name") or "")
         spec = get_tool_confirmation_spec(tool_name)
         if not spec:
             raise ValueError("Unknown tool.")
-        tool_text = _resolve_confirmation_tool_text(meta)
-        view = _build_tool_revise_modal_view(
-            tool_text,
-            json.dumps(meta, separators=(",", ":")),
-        )
+        view = _build_tool_revise_modal_view(row_key)
         client.views_open(trigger_id=body["trigger_id"], view=view)
     except ValueError as e:
         _reply_ephemeral_from_action(body, str(e))
@@ -366,6 +314,25 @@ def handle_revise_open_modal(body: dict, client) -> None:
         _reply_ephemeral_from_action(
             body, "Could not open revise dialog. Try again."
         )
+
+
+@log
+def handle_thumbs_up(body: dict) -> str:
+    row_key = _row_key_from_actions(body)
+    if not row_key:
+        return "Could not process this thumbs-up."
+    row = skill_runs.get(row_key)
+    if not row:
+        return "This confirmation has expired; cannot record thumbs-up."
+    skill_id = row.get("skill_id")
+    thread_ts = str(row.get("thread_ts") or "")
+    action_ts = str(row.get("action_ts") or "")
+    if not (isinstance(skill_id, str) and skill_id.strip() and thread_ts and action_ts):
+        return "Missing skill context; thumbs-up not saved."
+    ok = skill_thumbs_up.add_reference(skill_id, thread_ts, action_ts)
+    if not ok:
+        return "Could not save thumbs-up for this skill."
+    return f"Thanks — saved as an example for `{skill_id}`."
 
 
 def register_tool_confirmation_handlers(app: App) -> None:
@@ -380,20 +347,25 @@ def register_tool_confirmation_handlers(app: App) -> None:
         ack()
         handle_revise_open_modal(body, client)
 
+    @app.action(ACTION_TOOL_THUMBS_UP)
+    def _on_thumbs_up(ack, body, _client):
+        ack()
+        result = handle_thumbs_up(body)
+        _reply_ephemeral_from_action(body, result)
+
     @app.view(CALLBACK_TOOL_CONFIRM_REVISE_MODAL)
     def _on_modal_submit(ack, body, _client):
         view = body.get("view") or {}
-        meta_raw = view.get("private_metadata") or ""
+        row_key = (view.get("private_metadata") or "").strip()
         user_id = body.get("user", {}).get("id") or ""
-        try:
-            outer = json.loads(meta_raw)
-        except json.JSONDecodeError:
+        row = skill_runs.get(row_key) if row_key else None
+        if not row:
             ack(
                 response_action="errors",
                 errors={BLOCK_REVISE_INPUT: "Invalid dialog state."},
             )
             return
-        tool_name = str(outer.get("tool_name") or "")
+        tool_name = str(row.get("tool_name") or "")
         spec = get_tool_confirmation_spec(tool_name)
         if not spec:
             ack(
@@ -401,15 +373,14 @@ def register_tool_confirmation_handlers(app: App) -> None:
                 errors={BLOCK_REVISE_INPUT: "Unknown tool."},
             )
             return
-        channel_id = str(outer.get("payload", {}).get("channel_id") or "")
-        thread_ts = outer.get("payload", {}).get("thread_ts")
-        prepare_uid = str(outer.get("payload", {}).get("prepare_user_id") or "")
+        payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+        channel_id = str(payload.get("channel_id") or row.get("channel_id") or "")
+        thread_ts = payload.get("thread_ts") or row.get("thread_ts")
+        prepare_uid = str(payload.get("prepare_user_id") or "")
         if not channel_id or not prepare_uid:
             ack(
                 response_action="errors",
-                errors={
-                    BLOCK_REVISE_INPUT: "Missing Slack context to restart.",
-                },
+                errors={BLOCK_REVISE_INPUT: "Missing Slack context to restart."},
             )
             return
         values = view.get("state", {}).get("values", {})
@@ -419,22 +390,20 @@ def register_tool_confirmation_handlers(app: App) -> None:
         if not instruction:
             ack(
                 response_action="errors",
-                errors={
-                    BLOCK_REVISE_INPUT: "Enter an instruction or cancel.",
-                },
+                errors={BLOCK_REVISE_INPUT: "Enter an instruction or cancel."},
             )
             return
         ack()
 
         include_text = _checkbox_include_text_selected(values)
-        tool_text = str(outer.get("tool_text") or "")
+        tool_text = str(row.get("text") or "")
         user_text = _compose_tool_revise_user_text(
             instruction, tool_text, include_text,
         )
         channel_name = slack_api.get_channel_prefixed_name(channel_id)
         from common.slack.slack_bot.react_runner import run_react_and_confirm
 
-        ctx_kind = str(outer.get("payload", {}).get("context_kind") or "thread")
+        ctx_kind = str(payload.get("context_kind") or "thread")
         run_react_and_confirm(
             channel_id,
             thread_ts or "",
