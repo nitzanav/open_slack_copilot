@@ -93,10 +93,16 @@ Paste this when creating the app from a manifest:
         },
         "shortcuts": [
             {
-                "name": "Draft with CoPilot",
+                "name": "Draft thread reply",
                 "type": "message",
-                "callback_id": "draft_with_copilot",
-                "description": "Open a dialog to enter LLM instructions, then draft a reply for this thread"
+                "callback_id": "slack_copilot_draft_with_copilot",
+                "description": "Draft a reply for this thread"
+            },
+            {
+                "name": "Follow up",
+                "type": "message",
+                "callback_id": "slack_copilot_follow_up",
+                "description": "Follow up with mentioned users on the thread"
             }
         ],
         "slash_commands": [
@@ -143,6 +149,8 @@ Paste this when creating the app from a manifest:
     }
 }
 ```
+
+Message shortcuts must use `callback_id` **`slack_copilot_`** + the reply skill folder name (same name as under `~/.open_slack_copilot/skills/reply/`, only `a-z`, `A-Z`, `_`, `-`). The app registers one Bolt listener for that pattern; shortcuts without the prefix or without a matching `SKILL.md` are ignored silently.
 
 ### 2. Get Your Credentials
 

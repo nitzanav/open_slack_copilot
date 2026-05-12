@@ -3,9 +3,11 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from common.llm.llm_client.llm_client import AgentToolLoopResult, ToolCallRecord
+from common.slack.copilot_pipeline import MESSAGE_SHORTCUT_CALLBACK_PATTERN
 from common.slack.slack_bot.slack_listener_with_threads import (
     ACTION_SHORTCUT_INSTRUCTION_TEXT,
     BLOCK_SHORTCUT_INSTRUCTION,
+    CALLBACK_COPILOT_SHORTCUT_DRAFT_MODAL,
 )
 
 FIXTURES = Path(__file__).parent.parent / "tests" / "fixtures"
@@ -35,6 +37,10 @@ THREAD_3 = _load_fixture("fixture_thread_3_messages.json")
 
 def _mock_bot_deps(mock_llm, mock_pd, mock_rag):
     mock_pd.select_single_skill.return_value = ("reply/default", "default")
+    mock_pd.load_forced_reply_skill.return_value = (
+        "reply/draft_with_copilot",
+        "forced skill body",
+    )
     mock_rag.is_ready.return_value = True
     mock_rag.query_channel.return_value = []
     mock_rag.missing_channels.return_value = []
@@ -49,7 +55,7 @@ def _shortcut_payload(channel_id: str = "C1", user_id: str = "U1",
         message["thread_ts"] = thread_ts
     return {
         "type": "message_action",
-        "callback_id": "draft_with_copilot",
+        "callback_id": "slack_copilot_draft_with_copilot",
         "channel": {"id": channel_id, "name": "general"},
         "user": {"id": user_id, "name": "alice"},
         "message": message,
@@ -200,12 +206,11 @@ class TestMessageShortcutEndToEnd:
 
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
     def test_shortcut_callback_registration(self, mock_slack_api):
-        from common.slack.slack_bot.slack_listener_with_threads import (
-            CALLBACK_COPILOT_SHORTCUT_DRAFT_MODAL,
-            register_copilot_shortcut,
-        )
+        from common.slack.slack_bot.slack_listener_with_threads import register_copilot_shortcut
 
         app = MagicMock()
         register_copilot_shortcut(app, MagicMock())
-        app.shortcut.assert_called_once_with("draft_with_copilot")
+        assert app.shortcut.call_count == 1
+        pat = app.shortcut.call_args[0][0]
+        assert pat is MESSAGE_SHORTCUT_CALLBACK_PATTERN
         app.view.assert_called_once_with(CALLBACK_COPILOT_SHORTCUT_DRAFT_MODAL)

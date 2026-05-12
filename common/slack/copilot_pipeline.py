@@ -49,7 +49,7 @@ _INTERACTIVE_TOOLS = [
 
 @dataclass
 class ReactLoopResult:
-    """Outcome of ``run_react_loop`` (assistant text plus tool trace for callers)."""
+    """Outcome of ``run_react_loop`` / ``run_react_loop_with_selected_skill``."""
 
     text: str
     tool_trace: list[Any] = field(default_factory=list)
@@ -109,6 +109,54 @@ def resolve_copilot_slack_context(
     return thread_ts, fetch_thread_messages(channel_id, thread_ts)
 
 
+# Slack message shortcuts: ``callback_id`` is ``slack_copilot_<reply_skill_folder>`` (see README).
+MESSAGE_SHORTCUT_CALLBACK_PREFIX = "slack_copilot_"
+MESSAGE_SHORTCUT_CALLBACK_PATTERN = re.compile(
+    r"^slack_copilot_[a-zA-Z_-]+\Z",
+)
+
+
+class ForcedReplySkillMissing(Exception):
+    """Forced reply skill folder has no ``SKILL.md`` (or was removed after the modal opened)."""
+
+
+def load_forced_reply_skill(skill_folder: str) -> tuple[str, str] | None:
+    """Load ``reply/<skill_folder>/SKILL.md`` (same rules as progressive disclosure)."""
+    return progressive_disclosure.load_forced_reply_skill(skill_folder)
+
+
+def reply_skill_folder_from_slack_message_shortcut(callback_id: str) -> str | None:
+    """Resolve ``reply/<folder>/`` folder name from a message shortcut ``callback_id``, or None."""
+    cid = (callback_id or "").strip()
+    if not MESSAGE_SHORTCUT_CALLBACK_PATTERN.match(cid):
+        return None
+    suffix = cid.removeprefix(MESSAGE_SHORTCUT_CALLBACK_PREFIX)
+    if not progressive_disclosure.is_safe_reply_skill_folder_name(suffix):
+        return None
+    if load_forced_reply_skill(suffix) is None:
+        return None
+    return suffix
+
+
+def reply_skill_folder_valid_for_forced_modal(folder: str) -> bool:
+    """True when ``folder`` is safe and ``reply/<folder>/SKILL.md`` exists (modal submit guard)."""
+    f = (folder or "").strip()
+    if not progressive_disclosure.is_safe_reply_skill_folder_name(f):
+        return False
+    return load_forced_reply_skill(f) is not None
+
+
+def select_skill(
+    thread_messages: list[dict],
+    user_text: str,
+    skill_type: str = "reply",
+) -> tuple[str, str] | None:
+    """Pick one installed skill via progressive disclosure (LLM stages)."""
+    return progressive_disclosure.select_single_skill(
+        skill_type, thread_messages, user_text,
+    )
+
+
 def run_react_loop(
     channel_id: str,
     thread_ts: str,
@@ -123,13 +171,71 @@ def run_react_loop(
     copilot_action: str | None = None,
     *,
     context_kind: str = "thread",
+    forced_reply_skill_folder: str | None = None,
     on_agent_event: AgentEventNotifier | None = None,
 ) -> ReactLoopResult:
     if thread_messages is None:
         thread_messages = fetch_thread_messages(channel_id, thread_ts)
-    picked = progressive_disclosure.select_single_skill("reply", thread_messages, user_text)
-    if picked is not None:
-        skill_id, skill_text = picked
+    if forced_reply_skill_folder is not None:
+        selected = load_forced_reply_skill(forced_reply_skill_folder)
+        if selected is None:
+            raise ForcedReplySkillMissing
+        return run_react_loop_with_selected_skill(
+            channel_id,
+            thread_ts,
+            user_id,
+            user_text,
+            selected,
+            channel_name=channel_name,
+            tools=tools,
+            excluded_tools=excluded_tools,
+            tool_dispatch=tool_dispatch,
+            thread_messages=thread_messages,
+            copilot_trigger=copilot_trigger,
+            copilot_action=copilot_action,
+            context_kind=context_kind,
+            on_agent_event=on_agent_event,
+        )
+    picked = select_skill(thread_messages, user_text)
+    return run_react_loop_with_selected_skill(
+        channel_id,
+        thread_ts,
+        user_id,
+        user_text,
+        picked,
+        channel_name=channel_name,
+        tools=tools,
+        excluded_tools=excluded_tools,
+        tool_dispatch=tool_dispatch,
+        thread_messages=thread_messages,
+        copilot_trigger=copilot_trigger,
+        copilot_action=copilot_action,
+        context_kind=context_kind,
+        on_agent_event=on_agent_event,
+    )
+
+
+def run_react_loop_with_selected_skill(
+    channel_id: str,
+    thread_ts: str,
+    user_id: str,
+    user_text: str,
+    selected_skill: tuple[str, str] | None,
+    channel_name: str | None = None,
+    tools: list[dict] | None = None,
+    excluded_tools: list[dict] | None = None,
+    tool_dispatch: Callable[[str, str], str] | None = None,
+    thread_messages: list[dict] | None = None,
+    copilot_trigger: str | None = None,
+    copilot_action: str | None = None,
+    *,
+    context_kind: str = "thread",
+    on_agent_event: AgentEventNotifier | None = None,
+) -> ReactLoopResult:
+    if thread_messages is None:
+        thread_messages = fetch_thread_messages(channel_id, thread_ts)
+    if selected_skill is not None:
+        skill_id, skill_text = selected_skill
         _notify_skill_selection(channel_id, thread_ts, user_id, skill_id)
         skills = [skill_text]
     else:

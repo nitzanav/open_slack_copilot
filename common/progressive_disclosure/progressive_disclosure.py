@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 from common.log import log
@@ -8,6 +9,8 @@ from common.skill_thumbs_up import skill_thumbs_up
 
 SKILLS_ROOT = Path.home() / ".open_slack_copilot" / "skills"
 _SKILL_KINDS = ("reply", "watcher")
+# Reply skill folder name: one path segment, letters, underscore, hyphen.
+_REPLY_SKILL_FOLDER_NAME_RE = re.compile(r"^[a-zA-Z_-]+\Z")
 
 SELECTION_PROMPT = (
     "You are selecting relevant skills for drafting a Slack reply.\n"
@@ -46,6 +49,29 @@ def select_skills(
     selected_refs = _parse_selection(response, valid_refs)
     by_ref = dict(entries)
     return [(ref, by_ref[ref]) for ref in selected_refs if ref in by_ref]
+
+
+def is_safe_reply_skill_folder_name(name: str) -> bool:
+    """True when ``name`` is a single safe folder segment (``skills/reply/<name>/``)."""
+    n = (name or "").strip()
+    return bool(n) and _REPLY_SKILL_FOLDER_NAME_RE.match(n) is not None
+
+
+def load_forced_reply_skill(skill_folder: str) -> tuple[str, str] | None:
+    """Load ``reply/<skill_folder>/SKILL.md`` when present.
+
+    ``skill_folder`` is the directory name under ``~/.open_slack_copilot/skills/reply/``
+    (from a message shortcut ``callback_id`` after the ``slack_copilot_`` prefix).
+    """
+    cid = (skill_folder or "").strip()
+    if not is_safe_reply_skill_folder_name(cid):
+        return None
+    d = SKILLS_ROOT / "reply" / cid
+    if not d.is_dir() or not (d / "SKILL.md").is_file():
+        return None
+    ref = f"reply/{cid}"
+    skill_text = (d / "SKILL.md").read_text().strip()
+    return ref, _with_examples(ref, skill_text)
 
 
 @log

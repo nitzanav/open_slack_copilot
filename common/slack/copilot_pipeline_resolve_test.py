@@ -61,13 +61,13 @@ class TestResolveCopilotSlackContext:
 class TestRunReactLoopExcludedTools:
     @patch("common.slack.copilot_pipeline.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
-    @patch("common.slack.copilot_pipeline.progressive_disclosure")
+    @patch("common.slack.copilot_pipeline.select_skill")
     @patch("common.slack.copilot_pipeline.llm_client")
     @patch("common.slack.copilot_pipeline.slack_api")
     def test_excluded_tools_omit_schedule_keep_others(
-        self, mock_slack, mock_llm, mock_pd, mock_rag, mock_fetch,
+        self, mock_slack, mock_llm, mock_select_skill, mock_rag, mock_fetch,
     ):
-        mock_pd.select_single_skill.return_value = ("reply/default", "default")
+        mock_select_skill.return_value = ("reply/default", "default")
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []
@@ -90,13 +90,13 @@ class TestRunReactLoopExcludedTools:
 
     @patch("common.slack.copilot_pipeline.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
-    @patch("common.slack.copilot_pipeline.progressive_disclosure")
+    @patch("common.slack.copilot_pipeline.select_skill")
     @patch("common.slack.copilot_pipeline.llm_client")
     @patch("common.slack.copilot_pipeline.slack_api")
     def test_both_thread_reply_tools_always_exposed(
-        self, mock_slack, mock_llm, mock_pd, mock_rag, mock_fetch,
+        self, mock_slack, mock_llm, mock_select_skill, mock_rag, mock_fetch,
     ):
-        mock_pd.select_single_skill.return_value = ("reply/default", "default")
+        mock_select_skill.return_value = ("reply/default", "default")
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []
@@ -122,13 +122,13 @@ class TestRunReactLoopExcludedTools:
 class TestRunReactLoopToolErrorsInOutput:
     @patch("common.slack.copilot_pipeline.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
-    @patch("common.slack.copilot_pipeline.progressive_disclosure")
+    @patch("common.slack.copilot_pipeline.select_skill")
     @patch("common.slack.copilot_pipeline.llm_client")
     @patch("common.slack.copilot_pipeline.slack_api")
     def test_appends_tool_errors_to_output_text(
-        self, mock_slack, mock_llm, mock_pd, mock_rag, mock_fetch,
+        self, mock_slack, mock_llm, mock_select_skill, mock_rag, mock_fetch,
     ):
-        mock_pd.select_single_skill.return_value = ("reply/default", "default")
+        mock_select_skill.return_value = ("reply/default", "default")
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []
@@ -153,13 +153,13 @@ class TestRunReactLoopToolErrorsInOutput:
 class TestRunReactLoopEnrichesSkillRunsRow:
     @patch("common.slack.copilot_pipeline.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
-    @patch("common.slack.copilot_pipeline.progressive_disclosure")
+    @patch("common.slack.copilot_pipeline.select_skill")
     @patch("common.slack.copilot_pipeline.llm_client")
     @patch("common.slack.copilot_pipeline.slack_api")
     def test_enriches_existing_row_with_run_log(
-        self, mock_slack, mock_llm, mock_pd, mock_rag, mock_fetch, isolated_data_root,
+        self, mock_slack, mock_llm, mock_select_skill, mock_rag, mock_fetch, isolated_data_root,
     ):
-        mock_pd.select_single_skill.return_value = ("reply/x", "x")
+        mock_select_skill.return_value = ("reply/x", "x")
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []
