@@ -1,4 +1,7 @@
 - thumbs down (negative learning) — thumbs up is implemented and persists thumbed-up runs as skill examples
+- skill triggers are not effective
+  - On message, shortcut, better activate teh specific skill
+  - On mention, probably just act.
 - Summarize thread into fields in CSV and then Jira
   - Skill: When it seems that the ticket was closed and not action items, suggest to activate skill of thread closure.
     - Store the thread data result using the thread data extraction tool with attributes of problem, and solution.

@@ -1,4 +1,4 @@
-.PHONY: install run oauth-server test docker-build docker-run \
+.PHONY: install install-skill-examples run oauth-server test docker-build docker-run \
 	rag-inspect-all-channels rag-inspect-channel rag-inspect-all \
 	rag-inspect-collection rag-list-collections rag-help \
 	rag-clean rag-clean-dry-run \
@@ -22,7 +22,10 @@ RAG_STORAGE ?= .rag_storage
 	.venv/bin/pip install -r requirements.txt
 	@touch .venv/.installed
 
-install: .venv/.installed
+install-skill-examples:
+	./install_skill_examples.sh
+
+install: .venv/.installed install-skill-examples
 
 run: install
 	PYTHONPATH=. .venv/bin/python -m core.run
