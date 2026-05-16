@@ -23,10 +23,14 @@ def _collection():
     return data_layer.get_collection(COLLECTION)
 
 
-def make_conversation_id(skill_name: str, thread_ts: str, action_ts: str) -> str:
-    """Stable id for Slack buttons: ``<skill_name>__<thread_ts>__<action_ts>``."""
-    sn = (skill_name or "").strip() or "copilot"
-    return f"{sn}__{(thread_ts or '').strip()}__{(action_ts or '').strip()}"
+def make_conversation_id(skill_key: str, thread_ts: str, action_ts: str) -> str:
+    """Stable id for Slack buttons: ``<skill_key>__<thread_ts>__<action_ts>``.
+
+    ``skill_key`` is normally the skill id (e.g. ``reply/foo``); when absent,
+    the display ``name`` from the skill file is used instead.
+    """
+    sk = (skill_key or "").strip() or "copilot"
+    return f"{sk}__{(thread_ts or '').strip()}__{(action_ts or '').strip()}"
 
 
 @dataclass
@@ -130,7 +134,6 @@ class Conversation:
 
 def create(
     *,
-    conversation_id: str,
     skill_id: str | None,
     skill_name: str = "",
     skill_description: str = "",
@@ -144,9 +147,8 @@ def create(
     steps: dict[str, str],
     messages: list[dict[str, Any]],
 ) -> Conversation:
-    cid = (conversation_id or "").strip() or make_conversation_id(
-        skill_name, thread_ts, action_ts,
-    )
+    skill_key = (skill_id or skill_name or "").strip() or "copilot"
+    cid = make_conversation_id(skill_key, thread_ts, action_ts)
     conversation = Conversation(
         id=cid,
         skill_id=skill_id,
