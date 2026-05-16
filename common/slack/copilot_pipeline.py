@@ -293,12 +293,7 @@ def run_react_loop_with_selected_skill(
     )
     if bot_uid:
         tool_extra += f" Never mention `<@{bot_uid}>` in tool messages — that id is this app."
-    id_skill_key = (skill_id or skill_name or "").strip() or "copilot"
-    conversation_id = conversations.make_conversation_id(
-        id_skill_key, thread_ts, action_ts,
-    )
-    conversations.create(
-        conversation_id=conversation_id,
+    conversation = conversations.create(
         skill_id=skill_id,
         skill_name=skill_name,
         skill_description=skill_description,
@@ -315,6 +310,7 @@ def run_react_loop_with_selected_skill(
             {"role": "user", "content": tool_extra},
         ],
     )
+    conversation_id = conversation.id
     with react_invocation_context(
         channel_id, thread_ts, user_id,
         context_kind=context_kind,
