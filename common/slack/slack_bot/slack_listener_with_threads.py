@@ -8,6 +8,7 @@ from common.slack import copilot_user_notify
 from common.slack.copilot_pipeline import (
     MESSAGE_SHORTCUT_CALLBACK_PATTERN,
     ThreadFetchError,
+    load_forced_reply_skill,
     reply_skill_folder_from_slack_message_shortcut,
     reply_skill_folder_valid_for_forced_modal,
     resolve_copilot_slack_context,
@@ -24,9 +25,21 @@ _MENTION_TOKEN_RE = re.compile(r"<@[^>]+>\s*")
 CALLBACK_COPILOT_SHORTCUT_DRAFT_MODAL = "copilot_shortcut_draft_modal"
 BLOCK_SHORTCUT_INSTRUCTION = "copilot_shortcut_instruction"
 ACTION_SHORTCUT_INSTRUCTION_TEXT = "copilot_shortcut_instruction_text"
-MESSAGE_SHORTCUT_DEFAULT_INSTRUCTION = (
-    "Draft reply on my behalf for this thread"
-)
+
+
+def _instruction_default_for_message_shortcut(reply_skill_folder: str) -> str:
+    """Truthful minimal user text: which reply skill the user invoked via message shortcut.
+
+    Skill body still comes from forced progressive disclosure; this line is not a
+    second copy of the skill description (which is selection metadata, not user prose).
+    """
+    folder = (reply_skill_folder or "").strip()
+    skill = load_forced_reply_skill(folder)
+    display_name = (skill.name or "").strip() if skill else ""
+    if not display_name:
+        display_name = folder or "unknown"
+    safe = display_name.replace('"', "'")
+    return f'user asked to trigger skill "{safe}".'
 
 
 def _strip_app_mention_tokens(text: str) -> str:
@@ -121,7 +134,10 @@ def _shortcut_draft_modal_metadata(
     return json.dumps(payload, separators=(",", ":"))
 
 
-def _build_shortcut_draft_modal_view(private_metadata: str) -> dict:
+def _build_shortcut_draft_modal_view(
+    private_metadata: str,
+    initial_instruction: str,
+) -> dict:
     return {
         "type": "modal",
         "callback_id": CALLBACK_COPILOT_SHORTCUT_DRAFT_MODAL,
@@ -158,7 +174,7 @@ def _build_shortcut_draft_modal_view(private_metadata: str) -> dict:
                     "type": "plain_text_input",
                     "action_id": ACTION_SHORTCUT_INSTRUCTION_TEXT,
                     "multiline": True,
-                    "initial_value": MESSAGE_SHORTCUT_DEFAULT_INSTRUCTION,
+                    "initial_value": initial_instruction,
                     "placeholder": {
                         "type": "plain_text",
                         "text": "e.g. Shorter, bullets, polite no, add a deadline\u2026",
@@ -205,7 +221,10 @@ def register_copilot_shortcut(app: App, handler):
             shortcut["channel"].get("name"),
             reply_skill_folder,
         )
-        view = _build_shortcut_draft_modal_view(meta)
+        initial_instruction = _instruction_default_for_message_shortcut(
+            reply_skill_folder,
+        )
+        view = _build_shortcut_draft_modal_view(meta, initial_instruction)
         try:
             client.views_open(trigger_id=shortcut["trigger_id"], view=view)
         except Exception:
@@ -266,7 +285,9 @@ def register_copilot_shortcut(app: App, handler):
         el = block.get(ACTION_SHORTCUT_INSTRUCTION_TEXT) or {}
         instruction = (el.get("value") or "").strip()
         if not instruction:
-            instruction = MESSAGE_SHORTCUT_DEFAULT_INSTRUCTION
+            instruction = _instruction_default_for_message_shortcut(
+                reply_skill_folder,
+            )
         try:
             anchor_ts, thread_messages = resolve_copilot_slack_context(
                 channel_id, message,
