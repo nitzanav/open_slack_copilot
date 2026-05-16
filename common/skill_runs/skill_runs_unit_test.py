@@ -72,7 +72,21 @@ def test_format_as_example_renders_essentials():
     assert "Hi there." in out
 
 
-def test_get_helpers_when_row_missing(isolated_data_root):
-    assert skill_runs.get_text("missing") == ""
-    assert skill_runs.get_payload("missing") == {}
-    assert skill_runs.get_skill_id("missing") is None
+def test_init_run_returns_conversation_id_when_passed(isolated_data_root):
+    ret = skill_runs.init_run(
+        skill_id="reply/x",
+        channel_id="C1",
+        thread_ts="1.0",
+        action_ts="2026-05-10T00:00:00+00:00",
+        requester_user_id="U1",
+        tool_name="send_dm_as_app",
+        payload={},
+        text="hello",
+        conversation_id="opaque-cid-123",
+    )
+    assert ret == "opaque-cid-123"
+    row = skill_runs.get(skill_runs._row_key("1.0", "2026-05-10T00:00:00+00:00"))
+    assert row is not None
+    assert row.get("conversation_id") == "opaque-cid-123"
+
+

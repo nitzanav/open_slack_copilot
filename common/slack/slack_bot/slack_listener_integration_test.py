@@ -4,7 +4,12 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
+from common.conversations.conversations import Conversation
 from common.llm.llm_client.llm_client import AgentToolLoopResult, ToolCallRecord
+
+
+def _waiting_conversation() -> Conversation:
+    return Conversation(is_waiting_for_confirmation=True)
 
 FIXTURES = Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"
 
@@ -20,9 +25,23 @@ def _get_registered_handler(app: MagicMock):
 THREAD_3 = _load_fixture("fixture_thread_3_messages.json")
 THREAD_1 = _load_fixture("fixture_thread_singleton.json")
 
+_DEFAULT_TRIPLE = (
+    "reply/default",
+    "default",
+    {"main": "default"},
+)
 
-def _mock_bot_deps(mock_llm, mock_pd, mock_rag):
-    mock_pd.select_single_skill.return_value = ("reply/default", "default")
+
+@pytest.fixture(autouse=True)
+def _isolated_data_layer(tmp_path):
+    from config.config import settings
+
+    settings.set("data_layer.root", str(tmp_path))
+    yield
+
+
+def _mock_bot_deps(mock_pd, mock_rag):
+    mock_pd.select_single_skill.return_value = _DEFAULT_TRIPLE
     mock_rag.is_ready.return_value = True
     mock_rag.query_channel.return_value = []
     mock_rag.missing_channels.return_value = []
@@ -34,23 +53,28 @@ class TestSlashCommandEndToEnd:
     @patch("common.slack.slack_bot.react_runner.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
-    @patch("common.slack.copilot_pipeline.llm_client")
+    @patch("common.slack.copilot_pipeline.run_conversation_driver")
     @patch("common.slack.slack_bot.react_runner.copilot_user_notify")
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
-    def test_full_chain(self, mock_slack_api, mock_react_notify, mock_llm, mock_pd, mock_rag, mock_fetch):
+    def test_full_chain(self, mock_slack_api, mock_react_notify, mock_driver, mock_pd, mock_rag, mock_fetch):
         mock_fetch.return_value = THREAD_3
-        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult(
-            "",
-            [
-                ToolCallRecord(
-                    "send_thread_reply_on_behalf_of_requester",
-                    '{"status":"tool_confirmation_requested","detail":"ok"}',
-                ),
-            ],
-            [],
+        mock_driver.return_value = (
+            AgentToolLoopResult(
+                "",
+                [
+                    ToolCallRecord(
+                        "send_thread_reply_on_behalf_of_requester",
+                        '{"status":"tool_confirmation_requested","detail":"ok"}',
+                    ),
+                ],
+                [],
+                waiting_for_confirmation=True,
+            ),
+            _waiting_conversation(),
         )
-        _mock_bot_deps(mock_llm, mock_pd, mock_rag)
+        _mock_bot_deps(mock_pd, mock_rag)
 
+        from common.conversations import conversations
         from common.slack.slack_bot.slack_listener_with_threads import register_copilot_command
         from core.slack_bot import _handle_copilot
 
@@ -62,11 +86,14 @@ class TestSlashCommandEndToEnd:
 
         registered_fn(ack=MagicMock(), command=command)
 
-        mock_llm.agent_tool_loop.assert_called_once()
-        prompt = mock_llm.agent_tool_loop.call_args[0][0]
-        assert "reply politely" in prompt
+        mock_driver.assert_called_once()
+        cid = mock_driver.call_args[0][0]
+        conv = conversations.get(cid)
+        assert conv is not None
+        sys0 = str(conv.messages[0].get("content") or "")
+        assert "reply politely" in sys0
         for msg in THREAD_3:
-            assert msg["text"] in prompt
+            assert msg["text"] in sys0
 
         mock_react_notify.notify_error.assert_not_called()
         mock_react_notify.notify_react_feedback.assert_not_called()
@@ -74,17 +101,21 @@ class TestSlashCommandEndToEnd:
     @patch("common.slack.slack_bot.react_runner.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.progressive_disclosure")
-    @patch("common.slack.copilot_pipeline.llm_client")
+    @patch("common.slack.copilot_pipeline.run_conversation_driver")
     @patch("common.slack.slack_bot.react_runner.copilot_user_notify")
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
-    def test_singleton_thread_end_to_end(self, mock_slack_api, mock_react_notify, mock_llm, mock_pd, mock_rag, mock_fetch):
+    def test_singleton_thread_end_to_end(self, mock_slack_api, mock_react_notify, mock_driver, mock_pd, mock_rag, mock_fetch):
         mock_fetch.return_value = THREAD_1
-        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult(
-            "",
-            [ToolCallRecord("send_thread_reply_on_behalf_of_requester", '{"status":"tool_confirmation_requested"}')],
-            [],
+        mock_driver.return_value = (
+            AgentToolLoopResult(
+                "",
+                [ToolCallRecord("send_thread_reply_on_behalf_of_requester", '{"status":"tool_confirmation_requested"}')],
+                [],
+                waiting_for_confirmation=True,
+            ),
+            _waiting_conversation(),
         )
-        _mock_bot_deps(mock_llm, mock_pd, mock_rag)
+        _mock_bot_deps(mock_pd, mock_rag)
 
         from common.slack.slack_bot.slack_listener_with_threads import register_copilot_command
         from core.slack_bot import _handle_copilot

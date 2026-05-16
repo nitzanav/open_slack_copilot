@@ -17,6 +17,7 @@ class react_invocation_context:
         context_kind: str = "thread",
         skill_id: str | None = None,
         action_ts: str | None = None,
+        conversation_id: str | None = None,
     ):
         self._data = {
             "channel_id": channel_id,
@@ -25,6 +26,7 @@ class react_invocation_context:
             "context_kind": (context_kind or "thread").strip() or "thread",
             "skill_id": (skill_id or "").strip() or None,
             "action_ts": (action_ts or "").strip() or None,
+            "conversation_id": (conversation_id or "").strip() or None,
         }
         self._token = None
 

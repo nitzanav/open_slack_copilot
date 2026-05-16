@@ -17,6 +17,10 @@
 - refactor data things like settings and tools saved in ~/.open_slack_copilot to database using common/data_layer/
 - chat with the app itself on slack, should be free agent chat, not sure what is the difference.
 
+Refactors:
+- AgetToolLoop and conversations has overlapping
+- SkillRuns and Conversation has overlapping
+
 Future
 - coding - chat indications
 - In tool confirmation, add : powered by "open slack bot" with a link to github

@@ -43,3 +43,4 @@ class AgentToolLoopResult:
     text: str
     tool_trace: list[ToolCallRecord]
     tool_errors: list[str] = field(default_factory=list)
+    waiting_for_confirmation: bool = False

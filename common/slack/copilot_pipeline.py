@@ -7,9 +7,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from common.llm.llm_client import llm_client
 from common.llm.llm_apis.types import AgentEventNotifier
+from common.conversations import conversations
 from common.slack import agent_log
+from common.slack.conversations_driver import run_conversation_driver
 from common.progressive_disclosure import progressive_disclosure
 from common.skill_runs import skill_runs
 from common.slack import copilot_user_notify
@@ -50,6 +51,9 @@ class ReactLoopResult:
     text: str
     tool_trace: list[Any] = field(default_factory=list)
     tool_errors: list[str] = field(default_factory=list)
+    conversation_id: str | None = None
+    is_waiting_for_confirmation: bool = False
+    is_end: bool = False
 
 
 def _resolve_tools(
@@ -116,7 +120,7 @@ class ForcedReplySkillMissing(Exception):
     """Forced reply skill folder has no ``SKILL.md`` (or was removed after the modal opened)."""
 
 
-def load_forced_reply_skill(skill_folder: str) -> tuple[str, str] | None:
+def load_forced_reply_skill(skill_folder: str) -> tuple[str, str, list[dict[str, str]]] | None:
     """Load ``reply/<skill_folder>/SKILL.md`` (same rules as progressive disclosure)."""
     return progressive_disclosure.load_forced_reply_skill(skill_folder)
 
@@ -146,7 +150,7 @@ def select_skill(
     thread_messages: list[dict],
     user_text: str,
     skill_type: str = "reply",
-) -> tuple[str, str] | None:
+) -> tuple[str, str, list[dict[str, str]]] | None:
     """Pick one installed skill via progressive disclosure (LLM stages)."""
     return progressive_disclosure.select_single_skill(
         skill_type, thread_messages, user_text,
@@ -216,7 +220,7 @@ def run_react_loop_with_selected_skill(
     thread_ts: str,
     user_id: str,
     user_text: str,
-    selected_skill: tuple[str, str] | None,
+    selected_skill: tuple[str, str, list[dict[str, str]]] | None,
     channel_name: str | None = None,
     tools: list[dict] | None = None,
     excluded_tools: list[dict] | None = None,
@@ -231,11 +235,13 @@ def run_react_loop_with_selected_skill(
     if thread_messages is None:
         thread_messages = fetch_thread_messages(channel_id, thread_ts)
     if selected_skill is not None:
-        skill_id, skill_text = selected_skill
+        skill_id, skill_text, steps = selected_skill
         _notify_skill_selection(channel_id, thread_ts, user_id, skill_id)
-        skills = [skill_text]
+        skills = [skill_text] if skill_text.strip() else []
     else:
         skill_id = None
+        skill_text = ""
+        steps = {"main": ""}
         skills = []
     action_ts = datetime.now(timezone.utc).isoformat()
     thread_text = _thread_messages_text(thread_messages)
@@ -262,8 +268,6 @@ def run_react_loop_with_selected_skill(
         channel_name=channel_name,
         agent_log_section=agent_log_section,
     )
-    effective_tools = _resolve_tools(tools, excluded_tools)
-    effective_dispatch = tool_dispatch or dispatch_copilot_tool
     bot_uid = slack_api.get_bot_user_id()
     tool_extra = (
         "Thread reply tool selection (mandatory rules):\n"
@@ -280,18 +284,37 @@ def run_react_loop_with_selected_skill(
     )
     if bot_uid:
         tool_extra += f" Never mention `<@{bot_uid}>` in tool messages — that id is this app."
+    conversation_id = conversations.make_conversation_id()
+    conversations.create(
+        conversation_id=conversation_id,
+        skill_id=skill_id,
+        channel_id=channel_id,
+        thread_ts=thread_ts,
+        action_ts=action_ts,
+        requester_user_id=user_id,
+        prepare_user_id=user_id,
+        channel_name=channel_name,
+        context_kind=context_kind,
+        steps=steps,
+        messages=[
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": tool_extra},
+        ],
+    )
     with react_invocation_context(
         channel_id, thread_ts, user_id,
         context_kind=context_kind,
         skill_id=skill_id,
         action_ts=action_ts,
+        conversation_id=conversation_id,
     ):
-        loop_result = llm_client.agent_tool_loop(
-            prompt,
-            tool_extra,
-            effective_tools,
-            effective_dispatch,
+        loop_result, conversation = run_conversation_driver(
+            conversation_id,
+            tools=tools,
+            excluded_tools=excluded_tools,
+            tool_dispatch=tool_dispatch,
             on_agent_event=on_agent_event,
+            skip_next_step_intro=False,
         )
     draft = loop_result.text
     raw_tool_errors = list(loop_result.tool_errors)
@@ -317,14 +340,21 @@ def run_react_loop_with_selected_skill(
             "action": copilot_action,
             "summary": summary,
         }
-        tools = agent_log.tool_trace_for_record(loop_result.tool_trace)
-        if tools:
-            entry["tools"] = tools
+        tools_log = agent_log.tool_trace_for_record(loop_result.tool_trace)
+        if tools_log:
+            entry["tools"] = tools_log
         agent_log.append_entry(entry)
+    waiting = loop_result.waiting_for_confirmation
+    if conversation and conversation.is_waiting_for_confirmation:
+        waiting = True
+    ended = bool(conversation and conversation.is_end)
     return ReactLoopResult(
         text=draft,
         tool_trace=list(loop_result.tool_trace),
         tool_errors=raw_tool_errors,
+        conversation_id=conversation_id,
+        is_waiting_for_confirmation=waiting,
+        is_end=ended,
     )
 
 
