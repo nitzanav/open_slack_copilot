@@ -60,6 +60,17 @@ class Skill:
     raw_body: str = ""
     examples: str = ""
 
+    def __post_init__(self) -> None:
+        self._normalize_scalar_fields()
+
+    def _normalize_scalar_fields(self) -> None:
+        """Strip id/name/description/examples/preamble once; callers should not repeat ``(x or '').strip()``."""
+        self.id = (self.id or "").strip()
+        self.name = (self.name or "").strip()
+        self.description = (self.description or "").strip()
+        self.examples = (self.examples or "").strip()
+        self.preamble = (self.preamble or "").strip()
+
 
 def parse_skill(skill_id: str, text: str) -> Skill:
     """Parse a ``SKILL.md`` document for the given ``skill_id``.
@@ -122,7 +133,7 @@ def render_body(skill: Skill) -> str:
             section = f"## {name}\n{inst}".strip()
             parts.append(section)
         body = "\n\n".join(p for p in parts if p).strip()
-    examples = (skill.examples or "").strip()
+    examples = skill.examples
     if not examples:
         return body
     if not body:

@@ -35,7 +35,7 @@ def _instruction_default_for_message_shortcut(reply_skill_folder: str) -> str:
     """
     folder = (reply_skill_folder or "").strip()
     skill = load_forced_reply_skill(folder)
-    display_name = (skill.name or "").strip() if skill else ""
+    display_name = skill.name if skill else ""
     if not display_name:
         display_name = folder or "unknown"
     safe = display_name.replace('"', "'")
