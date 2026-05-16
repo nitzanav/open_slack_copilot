@@ -13,6 +13,7 @@ from common.slack import agent_log
 from common.slack.conversations_driver import run_conversation_driver
 from common.progressive_disclosure import progressive_disclosure
 from common.skill_runs import skill_runs
+from common.skills.skill_parser import Skill, render_body
 from common.slack import copilot_user_notify
 from common.slack.slack_api import slack_api
 from common.slack.slack_rag import slack_rag
@@ -120,7 +121,7 @@ class ForcedReplySkillMissing(Exception):
     """Forced reply skill folder has no ``SKILL.md`` (or was removed after the modal opened)."""
 
 
-def load_forced_reply_skill(skill_folder: str) -> tuple[str, str, list[dict[str, str]]] | None:
+def load_forced_reply_skill(skill_folder: str) -> Skill | None:
     """Load ``reply/<skill_folder>/SKILL.md`` (same rules as progressive disclosure)."""
     return progressive_disclosure.load_forced_reply_skill(skill_folder)
 
@@ -150,7 +151,7 @@ def select_skill(
     thread_messages: list[dict],
     user_text: str,
     skill_type: str = "reply",
-) -> tuple[str, str, list[dict[str, str]]] | None:
+) -> Skill | None:
     """Pick one installed skill via progressive disclosure (LLM stages)."""
     return progressive_disclosure.select_single_skill(
         skill_type, thread_messages, user_text,
@@ -220,7 +221,7 @@ def run_react_loop_with_selected_skill(
     thread_ts: str,
     user_id: str,
     user_text: str,
-    selected_skill: tuple[str, str, list[dict[str, str]]] | None,
+    selected_skill: Skill | None,
     channel_name: str | None = None,
     tools: list[dict] | None = None,
     excluded_tools: list[dict] | None = None,
@@ -235,11 +236,17 @@ def run_react_loop_with_selected_skill(
     if thread_messages is None:
         thread_messages = fetch_thread_messages(channel_id, thread_ts)
     if selected_skill is not None:
-        skill_id, skill_text, steps = selected_skill
+        skill_id = selected_skill.id
+        skill_name = selected_skill.name
+        skill_description = selected_skill.description
+        skill_text = render_body(selected_skill)
+        steps = selected_skill.steps
         _notify_skill_selection(channel_id, thread_ts, user_id, skill_id)
         skills = [skill_text] if skill_text.strip() else []
     else:
         skill_id = None
+        skill_name = ""
+        skill_description = ""
         skill_text = ""
         steps = {"main": ""}
         skills = []
@@ -288,6 +295,8 @@ def run_react_loop_with_selected_skill(
     conversations.create(
         conversation_id=conversation_id,
         skill_id=skill_id,
+        skill_name=skill_name,
+        skill_description=skill_description,
         channel_id=channel_id,
         thread_ts=thread_ts,
         action_ts=action_ts,

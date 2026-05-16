@@ -29,7 +29,10 @@ class TestEndToEndSkillSelection:
         skill_dir = tmp_path / "reply"
         skill_dir.mkdir()
         (skill_dir / "polite_reply").mkdir()
-        (skill_dir / "polite_reply" / "SKILL.md").write_text("Be warm and professional.")
+        (skill_dir / "polite_reply" / "SKILL.md").write_text(
+            "---\nname: Polite Reply\ndescription: Be warm and professional.\n---\n"
+            "Be warm and professional.\n"
+        )
 
         mock_llm.generate.return_value = '["reply/polite_reply"]'
 
@@ -37,9 +40,9 @@ class TestEndToEndSkillSelection:
             from common.progressive_disclosure.progressive_disclosure import select_skills
             result = select_skills("reply", THREAD, "")
             assert len(result) == 1
-            assert result[0][0] == "reply/polite_reply"
-            assert result[0][1] == "Be warm and professional."
-            assert result[0][2] == {"main": "Be warm and professional."}
+            assert result[0].id == "reply/polite_reply"
+            assert result[0].description == "Be warm and professional."
+            assert result[0].steps == {"main": "Be warm and professional."}
 
     @patch("common.slack.copilot_pipeline.run_conversation_driver")
     @patch("common.slack.copilot_pipeline.fetch_thread_messages")
@@ -49,7 +52,10 @@ class TestEndToEndSkillSelection:
         skill_dir = tmp_path / "reply"
         skill_dir.mkdir()
         (skill_dir / "code_review").mkdir()
-        (skill_dir / "code_review" / "SKILL.md").write_text("Review code carefully.")
+        (skill_dir / "code_review" / "SKILL.md").write_text(
+            "---\nname: Code Review\ndescription: Review code carefully.\n---\n"
+            "Review code carefully.\n"
+        )
 
         mock_pd_llm.generate.return_value = '["reply/code_review"]'
         mock_driver.return_value = (AgentToolLoopResult("Draft with code review skill", []), Conversation())

@@ -1,4 +1,7 @@
-# Draft Thread Reply
+---
+name: Draft Thread Reply
+description: Default skill for drafting concise thread replies on behalf of the requester.
+---
 
 **Reply skill** — Default skill for drafting thread replies. Install under `~/.open_slack_copilot/skills/reply/draft_thread_reply/` (copy from the repo's `skill_examples/reply/draft_thread_reply/`).
 

@@ -6,7 +6,7 @@ from common.log import log
 from common.llm.llm_client import llm_client
 from common.skill_runs import skill_runs
 from common.skill_thumbs_up import skill_thumbs_up
-from common.skills.skill_steps import parse_steps_from_markdown
+from common.skills.skill_parser import Skill, parse_skill
 
 SKILLS_ROOT = Path.home() / ".open_slack_copilot" / "skills"
 _SKILL_KINDS = ("reply", "watcher")
@@ -35,20 +35,20 @@ SINGLE_SELECTION_PROMPT = (
 @log
 def select_skills(
     skill_type: str, thread_messages: list[dict], user_text: str,
-) -> list[tuple[str, str, dict[str, str]]]:
-    """Stage 1: candidate skills. Returns ``(id, body_text_with_examples, steps)``."""
+) -> list[Skill]:
+    """Stage 1: candidate skills. Each carries body text with examples appended."""
     entries = _skill_entries_for_kind(skill_type)
     if not entries:
         return []
 
     thread_context = _summarize_context(thread_messages, user_text)
-    skill_list = "\n".join(f"- {ref}" for ref, _, _ in entries)
+    skill_list = _format_skill_list(entries)
     prompt = SELECTION_PROMPT.format(skill_list=skill_list, thread_context=thread_context)
 
     response = llm_client.generate(prompt)
-    valid_refs = [ref for ref, _, _ in entries]
+    valid_refs = [s.id for s in entries]
     selected_refs = _parse_selection(response, valid_refs)
-    by_ref = {ref: (ref, body, steps) for ref, body, steps in entries}
+    by_ref = {s.id: s for s in entries}
     return [by_ref[ref] for ref in selected_refs if ref in by_ref]
 
 
@@ -59,7 +59,7 @@ def is_safe_reply_skill_folder_name(name: str) -> bool:
 
 
 @log
-def load_forced_reply_skill(skill_folder: str) -> tuple[str, str, dict[str, str]] | None:
+def load_forced_reply_skill(skill_folder: str) -> Skill | None:
     """Load ``reply/<skill_folder>/SKILL.md`` when present.
 
     ``skill_folder`` is the directory name under ``~/.open_slack_copilot/skills/reply/``
@@ -73,16 +73,14 @@ def load_forced_reply_skill(skill_folder: str) -> tuple[str, str, dict[str, str]
         return None
     ref = f"reply/{cid}"
     raw = (d / "SKILL.md").read_text().strip()
-    steps, body = parse_steps_from_markdown(raw)
-    body_ex = _with_examples(ref, body)
-    return ref, body_ex, steps
+    return _skill_with_examples(ref, raw)
 
 
 @log
 def select_single_skill(
     skill_type: str, thread_messages: list[dict], user_text: str,
-) -> tuple[str, str, dict[str, str]] | None:
-    """Stage 2: pick exactly one skill (LLM call). Returns ``(id, body_with_examples, steps)``."""
+) -> Skill | None:
+    """Stage 2: pick exactly one skill (LLM call)."""
     candidates = select_skills(skill_type, thread_messages, user_text)
     if not candidates:
         candidates = _skill_entries_for_kind(skill_type)
@@ -92,40 +90,54 @@ def select_single_skill(
         return candidates[0]
 
     thread_context = _summarize_context(thread_messages, user_text)
-    skill_list = "\n".join(f"- {ref}" for ref, _, _ in candidates)
+    skill_list = _format_skill_list(candidates)
     prompt = SINGLE_SELECTION_PROMPT.format(
         skill_list=skill_list, thread_context=thread_context,
     )
-    valid_refs = [ref for ref, _, _ in candidates]
+    valid_refs = [s.id for s in candidates]
     response = (llm_client.generate(prompt) or "").strip()
     picked_id = _parse_single_selection(response, valid_refs)
-    by_ref = {ref: (ref, body, steps) for ref, body, steps in candidates}
+    by_ref = {s.id: s for s in candidates}
     if picked_id and picked_id in by_ref:
         return by_ref[picked_id]
     return candidates[0]
 
 
-def _skill_entries_for_kind(kind: str) -> list[tuple[str, str, dict[str, str]]]:
+def _skill_entries_for_kind(kind: str) -> list[Skill]:
     if kind not in _SKILL_KINDS:
         return []
     base = SKILLS_ROOT / kind
     if not base.is_dir():
         return []
-    out: list[tuple[str, str, dict[str, str]]] = []
+    out: list[Skill] = []
     for d in base.iterdir():
         if d.is_dir() and (d / "SKILL.md").is_file():
             ref = f"{kind}/{d.name}"
             raw = (d / "SKILL.md").read_text().strip()
-            steps, body = parse_steps_from_markdown(raw)
-            body_ex = _with_examples(ref, body)
-            out.append((ref, body_ex, steps))
+            out.append(_skill_with_examples(ref, raw))
     return out
 
 
-def _with_examples(skill_id: str, skill_text: str) -> str:
+def _skill_with_examples(skill_id: str, raw: str) -> Skill:
+    """Parse a SKILL.md and attach thumbs-up examples (rendered by render_body)."""
+    skill = parse_skill(skill_id, raw)
+    skill.examples = _format_examples_block(skill_id)
+    return skill
+
+
+def _format_skill_list(entries: list[Skill]) -> str:
+    lines: list[str] = []
+    for s in entries:
+        desc = (s.description or "").strip()
+        lines.append(f"- {s.id}: {desc}" if desc else f"- {s.id}")
+    return "\n".join(lines)
+
+
+def _format_examples_block(skill_id: str) -> str:
+    """Build the ``## Examples (recent good runs)`` section, or "" if none."""
     refs = skill_thumbs_up.recent_references(skill_id, limit=20)
     if not refs:
-        return skill_text
+        return ""
     rendered: list[str] = []
     for r in refs:
         key = skill_runs._row_key(r.get("thread_ts", ""), r.get("action_ts", ""))
@@ -133,8 +145,8 @@ def _with_examples(skill_id: str, skill_text: str) -> str:
         if row:
             rendered.append(skill_runs.format_as_example(row))
     if not rendered:
-        return skill_text
-    return f"{skill_text}\n\n## Examples (recent good runs)\n\n" + "\n\n".join(rendered)
+        return ""
+    return "## Examples (recent good runs)\n\n" + "\n\n".join(rendered)
 
 
 def _parse_selection(response: str, valid_titles: list[str]) -> list[str]:

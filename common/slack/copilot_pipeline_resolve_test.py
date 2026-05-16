@@ -5,6 +5,7 @@ import pytest
 from common.conversations.conversations import Conversation
 from common.llm.llm_client.llm_client import AgentToolLoopResult, ToolCallRecord
 from common.skill_runs import skill_runs
+from common.skills.skill_parser import Skill
 from common.slack.copilot_pipeline import (
     run_react_loop,
     resolve_copilot_slack_context,
@@ -22,6 +23,16 @@ from common.tools.send_thread_reply_on_behalf_of_requester import (
 
 def _main_step(instruction: str) -> dict[str, str]:
     return {"main": instruction}
+
+
+def _skill(skill_id: str, instruction: str) -> Skill:
+    return Skill(
+        id=skill_id,
+        name=skill_id.split("/")[-1],
+        description=instruction,
+        steps={"main": instruction},
+        raw_body=instruction,
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -72,7 +83,7 @@ class TestRunReactLoopExcludedTools:
     def test_excluded_tools_omit_schedule_keep_others(
         self, mock_slack, mock_select_skill, mock_rag, mock_fetch, mock_driver,
     ):
-        mock_select_skill.return_value = ("reply/default", "default", _main_step("default"))
+        mock_select_skill.return_value = _skill("reply/default", "default")
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []
@@ -111,7 +122,7 @@ class TestRunReactLoopExcludedTools:
     def test_both_thread_reply_tools_always_exposed(
         self, mock_slack, mock_select_skill, mock_rag, mock_fetch, mock_driver,
     ):
-        mock_select_skill.return_value = ("reply/default", "default", _main_step("default"))
+        mock_select_skill.return_value = _skill("reply/default", "default")
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []
@@ -154,7 +165,7 @@ class TestRunReactLoopToolErrorsInOutput:
     def test_appends_tool_errors_to_output_text(
         self, mock_slack, mock_select_skill, mock_rag, mock_fetch, mock_driver,
     ):
-        mock_select_skill.return_value = ("reply/default", "default", _main_step("default"))
+        mock_select_skill.return_value = _skill("reply/default", "default")
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []
@@ -188,7 +199,7 @@ class TestRunReactLoopEnrichesSkillRunsRow:
     def test_enriches_existing_row_with_run_log(
         self, mock_slack, mock_select_skill, mock_rag, mock_fetch, mock_driver,
     ):
-        mock_select_skill.return_value = ("reply/x", "x", _main_step("x"))
+        mock_select_skill.return_value = _skill("reply/x", "x")
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []
