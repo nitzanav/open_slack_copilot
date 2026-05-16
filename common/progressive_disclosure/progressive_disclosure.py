@@ -122,13 +122,14 @@ def _skill_with_examples(skill_id: str, raw: str) -> Skill:
     """Parse a SKILL.md and attach thumbs-up examples (rendered by render_body)."""
     skill = parse_skill(skill_id, raw)
     skill.examples = _format_examples_block(skill_id)
+    skill._normalize_scalar_fields()
     return skill
 
 
 def _format_skill_list(entries: list[Skill]) -> str:
     lines: list[str] = []
     for s in entries:
-        desc = (s.description or "").strip()
+        desc = s.description
         lines.append(f"- {s.id}: {desc}" if desc else f"- {s.id}")
     return "\n".join(lines)
 
