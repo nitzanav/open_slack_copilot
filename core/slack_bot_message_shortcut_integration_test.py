@@ -41,10 +41,22 @@ def _get_registered_modal_handler(app: MagicMock, decorator):
 
 THREAD_3 = _load_fixture("fixture_thread_3_messages.json")
 
-_DEFAULT_TRIPLE = (
-    "reply/default",
-    "default",
-    {"main": "default"},
+from common.skills.skill_parser import Skill
+
+_DEFAULT_SKILL = Skill(
+    id="reply/default",
+    name="default",
+    description="default skill",
+    steps={"main": "default"},
+    raw_body="default",
+)
+
+_FORCED_SKILL = Skill(
+    id="reply/draft_with_copilot",
+    name="Draft with CoPilot",
+    description="forced draft skill",
+    steps={"main": "forced skill body"},
+    raw_body="forced skill body",
 )
 
 
@@ -57,12 +69,8 @@ def _isolated_data_layer(tmp_path):
 
 
 def _mock_bot_deps(mock_pd, mock_rag):
-    mock_pd.select_single_skill.return_value = _DEFAULT_TRIPLE
-    mock_pd.load_forced_reply_skill.return_value = (
-        "reply/draft_with_copilot",
-        "forced skill body",
-        {"main": "forced skill body"},
-    )
+    mock_pd.select_single_skill.return_value = _DEFAULT_SKILL
+    mock_pd.load_forced_reply_skill.return_value = _FORCED_SKILL
     mock_rag.is_ready.return_value = True
     mock_rag.query_channel.return_value = []
     mock_rag.missing_channels.return_value = []

@@ -39,6 +39,8 @@ class Conversation:
 
     id: str = ""
     skill_id: str | None = None
+    skill_name: str = ""
+    skill_description: str = ""
     channel_id: str = ""
     thread_ts: str = ""
     action_ts: str = ""
@@ -82,6 +84,8 @@ class Conversation:
         return cls(
             id=data["conversation_id"],
             skill_id=data["skill_id"],
+            skill_name=data.get("skill_name", ""),
+            skill_description=data.get("skill_description", ""),
             channel_id=data["channel_id"],
             thread_ts=data["thread_ts"],
             action_ts=data["action_ts"],
@@ -103,6 +107,8 @@ class Conversation:
         return {
             "conversation_id": self.id,
             "skill_id": self.skill_id,
+            "skill_name": self.skill_name,
+            "skill_description": self.skill_description,
             "channel_id": self.channel_id,
             "thread_ts": self.thread_ts,
             "action_ts": self.action_ts,
@@ -125,6 +131,8 @@ def create(
     *,
     conversation_id: str,
     skill_id: str | None,
+    skill_name: str = "",
+    skill_description: str = "",
     channel_id: str,
     thread_ts: str,
     action_ts: str,
@@ -138,6 +146,8 @@ def create(
     conversation = Conversation(
         id=conversation_id,
         skill_id=skill_id,
+        skill_name=skill_name,
+        skill_description=skill_description,
         channel_id=channel_id,
         thread_ts=thread_ts,
         action_ts=action_ts,

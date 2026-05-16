@@ -1,1 +1,6 @@
-Provide a technically detailed review. Point out potential issues, suggest improvements, and reference best practices.
+---
+name: Technical Review
+description: Provide a technical review focused on accuracy and clarity.
+---
+
+Provide a technical review. Focus on accuracy and clarity.
