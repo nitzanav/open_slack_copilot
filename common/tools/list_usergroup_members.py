@@ -11,8 +11,11 @@ LIST_USERGROUP_MEMBERS_TOOL = {
         "name": "list_usergroup_members",
         "description": (
             "List Slack user IDs in a User Group (subteam). "
-            "Pass the group id (S…), a subteam mention from a message "
-            "(e.g. <!subteam^S…|label>), handle (e.g. backend-team), or @handle. "
+            "Accepts ONLY a user group id starting with `S` (e.g. S0614…), a "
+            "subteam mention from a message (`<!subteam^S…|label>`), or a "
+            "group handle/name (e.g. `backend-team`, `@backend-team`). "
+            "Do NOT pass individual user ids starting with `U` — for "
+            "resolving an individual person use the `list_users` tool. "
             "Requires the Slack app to have usergroups:read."
         ),
         "parameters": {
