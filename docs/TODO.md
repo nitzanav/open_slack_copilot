@@ -1,3 +1,10 @@
+- thumbs up - files system is not a good place - RAG is the right one, because you want to take the best one
+- structure of skills and rules. skill has rules, rule is linked to many conversation actions (channel_id, thread_ts, conversation_id, action_ts)
+  - when you click on thumbs up, it will not need only to add the conversation as example. A conversation is not a rule, iti s not clear enough and has lot's of noice.
+    - The LLM will suggest "adding rule to skill", as a tool, the user can then revise. Rule of skill,conversation is unique, so it will modify it.
+    - Rule linked to channel
+    - So in future, the LLM can say that it schose this skill give that rule, chich is based on this thread (link). '+1' can add link to the rule and then make
+- category - ...
 - [PARTIALLY TESTED, link was added in json] - thumbs down (negative learning) — thumbs up is implemented and persists thumbed-up runs as skill examples
 - TO TEST skill triggers are not effective
   - On message, shortcut, better activate teh specific skill
