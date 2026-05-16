@@ -242,13 +242,15 @@ def run_react_and_confirm(
             str(e),
         )
         return
-    except Exception:
+    except Exception as e:
         _logger.exception("run_react_and_confirm failed")
+        header = _format_failure_message(copilot_trigger, copilot_action)
+        detail = f"{type(e).__name__}: {e}".strip()
         copilot_user_notify.notify_error(
             channel_id,
             thread_ts,
             recipient_user_id,
-            _format_failure_message(copilot_trigger, copilot_action),
+            f"{header}\n{detail}" if detail else header,
         )
         return
 
