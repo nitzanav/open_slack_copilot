@@ -126,7 +126,9 @@ def test_queue_tool_confirmation_persists_row_and_uses_row_key(isolated_data_roo
         "thread_ts": "1.0",
         "prepare_user_id": "U_PREP",
     }
-    cid = conv_mod.make_conversation_id()
+    cid = conv_mod.make_conversation_id(
+        "reply/draft_thread_reply", "1.0", "2026-05-10T00:00:00+00:00",
+    )
     with patch("common.slack.slack_bot.tool_confirmation.copilot_user_notify") as notify, \
          react_invocation_context(
             "C1", "1.0", "U_PREP",

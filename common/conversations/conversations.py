@@ -23,9 +23,10 @@ def _collection():
     return data_layer.get_collection(COLLECTION)
 
 
-def make_conversation_id() -> str:
-    """Generate a fresh, opaque conversation id."""
-    return uuid.uuid4().hex
+def make_conversation_id(skill_name: str, thread_ts: str, action_ts: str) -> str:
+    """Stable id for Slack buttons: ``<skill_name>__<thread_ts>__<action_ts>``."""
+    sn = (skill_name or "").strip() or "copilot"
+    return f"{sn}__{(thread_ts or '').strip()}__{(action_ts or '').strip()}"
 
 
 @dataclass
@@ -143,8 +144,11 @@ def create(
     steps: dict[str, str],
     messages: list[dict[str, Any]],
 ) -> Conversation:
+    cid = (conversation_id or "").strip() or make_conversation_id(
+        skill_name, thread_ts, action_ts,
+    )
     conversation = Conversation(
-        id=conversation_id,
+        id=cid,
         skill_id=skill_id,
         skill_name=skill_name,
         skill_description=skill_description,

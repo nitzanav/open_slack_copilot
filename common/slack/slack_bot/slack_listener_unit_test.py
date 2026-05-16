@@ -2,11 +2,12 @@ import json
 from unittest.mock import patch, MagicMock
 
 from common.slack.copilot_pipeline import MESSAGE_SHORTCUT_CALLBACK_PATTERN
+from common.skills.skill_parser import Skill
+
 from common.slack.slack_bot.slack_listener_with_threads import (
     ACTION_SHORTCUT_INSTRUCTION_TEXT,
     BLOCK_SHORTCUT_INSTRUCTION,
     CALLBACK_COPILOT_SHORTCUT_DRAFT_MODAL,
-    MESSAGE_SHORTCUT_DEFAULT_INSTRUCTION,
     register_copilot_app_mention,
     register_copilot_command,
     register_copilot_shortcut,
@@ -97,13 +98,21 @@ class TestRegisterCopilotShortcut:
         assert app.shortcut.call_args[0][0] is MESSAGE_SHORTCUT_CALLBACK_PATTERN
         app.view.assert_called_once_with(CALLBACK_COPILOT_SHORTCUT_DRAFT_MODAL)
 
+    @patch("common.slack.slack_bot.slack_listener_with_threads.load_forced_reply_skill")
     @patch("common.slack.slack_bot.slack_listener_with_threads.reply_skill_folder_from_slack_message_shortcut")
     @patch("common.slack.slack_bot.slack_listener_with_threads.resolve_copilot_slack_context")
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
     def test_shortcut_opens_modal_with_thread_metadata(
-        self, mock_slack_api, mock_resolve, mock_reply_folder,
+        self, mock_slack_api, mock_resolve, mock_reply_folder, mock_load_skill,
     ):
         mock_reply_folder.return_value = "draft_with_copilot"
+        mock_load_skill.return_value = Skill(
+            id="reply/draft_with_copilot",
+            name="Draft Thread Reply",
+            description="Default skill for drafting.",
+            steps={"main": "body"},
+            raw_body="body",
+        )
         app = MagicMock()
         handler = MagicMock()
         msgs = [{"user": "U1", "text": "hello"}]
@@ -132,7 +141,9 @@ class TestRegisterCopilotShortcut:
             b for b in view["blocks"] if b.get("block_id") == BLOCK_SHORTCUT_INSTRUCTION
         )
         el = instr["element"]
-        assert el["initial_value"] == MESSAGE_SHORTCUT_DEFAULT_INSTRUCTION
+        assert el["initial_value"] == (
+            'user asked to trigger skill "Draft Thread Reply".'
+        )
         assert "placeholder" in el
         assert instr.get("hint")
         meta = json.loads(view["private_metadata"])
@@ -144,6 +155,47 @@ class TestRegisterCopilotShortcut:
             "user_id": "U1",
             "channel_name": "team-chat",
         }
+
+    @patch("common.slack.slack_bot.slack_listener_with_threads.load_forced_reply_skill")
+    @patch("common.slack.slack_bot.slack_listener_with_threads.reply_skill_folder_from_slack_message_shortcut")
+    @patch("common.slack.slack_bot.slack_listener_with_threads.resolve_copilot_slack_context")
+    @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
+    def test_shortcut_opens_modal_follow_up_uses_trigger_line(
+        self, mock_slack_api, mock_resolve, mock_reply_folder, mock_load_skill,
+    ):
+        mock_reply_folder.return_value = "follow_up"
+        mock_load_skill.return_value = Skill(
+            id="reply/follow_up",
+            name="Follow Up",
+            description="Schedule periodic reminders for users in this thread.",
+            steps={"main": "body"},
+            raw_body="body",
+        )
+        app = MagicMock()
+        handler = MagicMock()
+        msgs = [{"user": "U1", "text": "hello"}]
+        mock_resolve.return_value = ("1516229200.000000", msgs)
+
+        register_copilot_shortcut(app, handler)
+        registered_fn = _get_registered_shortcut_handler(app)
+        client = MagicMock()
+
+        shortcut = {
+            "callback_id": "slack_copilot_follow_up",
+            "channel": {"id": "C1", "name": "team-chat"},
+            "user": {"id": "U1"},
+            "message": {"ts": "1516229207.000133", "thread_ts": "1516229200.000000"},
+            "trigger_id": "trigger-1",
+        }
+        registered_fn(ack=MagicMock(), shortcut=shortcut, client=client)
+
+        view = client.views_open.call_args[1]["view"]
+        instr = next(
+            b for b in view["blocks"] if b.get("block_id") == BLOCK_SHORTCUT_INSTRUCTION
+        )
+        el = instr["element"]
+        assert el["initial_value"] == 'user asked to trigger skill "Follow Up".'
+        mock_load_skill.assert_called_with("follow_up")
 
     @patch("common.slack.slack_bot.slack_listener_with_threads.reply_skill_folder_from_slack_message_shortcut")
     @patch("common.slack.slack_bot.slack_listener_with_threads.resolve_copilot_slack_context")
@@ -284,13 +336,21 @@ class TestRegisterCopilotShortcut:
         handler.assert_not_called()
         mock_resolve.assert_not_called()
 
+    @patch("common.slack.slack_bot.slack_listener_with_threads.load_forced_reply_skill")
     @patch("common.slack.slack_bot.slack_listener_with_threads.reply_skill_folder_valid_for_forced_modal")
     @patch("common.slack.slack_bot.slack_listener_with_threads.resolve_copilot_slack_context")
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
     def test_shortcut_modal_submit_empty_instruction_uses_default(
-        self, mock_slack_api, mock_resolve, mock_valid_folder,
+        self, mock_slack_api, mock_resolve, mock_valid_folder, mock_load_skill,
     ):
         mock_valid_folder.return_value = True
+        mock_load_skill.return_value = Skill(
+            id="reply/draft_with_copilot",
+            name="Draft Thread Reply",
+            description="Default skill for drafting.",
+            steps={"main": "body"},
+            raw_body="body",
+        )
         app = MagicMock()
         handler = MagicMock()
         mock_resolve.return_value = ("T1", [])
@@ -317,7 +377,54 @@ class TestRegisterCopilotShortcut:
         }
         modal_fn(ack=MagicMock(), body=body, _client=MagicMock())
         handler.assert_called_once()
-        assert handler.call_args[1]["user_text"] == MESSAGE_SHORTCUT_DEFAULT_INSTRUCTION
+        assert handler.call_args[1]["user_text"] == (
+            'user asked to trigger skill "Draft Thread Reply".'
+        )
+
+    @patch("common.slack.slack_bot.slack_listener_with_threads.load_forced_reply_skill")
+    @patch("common.slack.slack_bot.slack_listener_with_threads.reply_skill_folder_valid_for_forced_modal")
+    @patch("common.slack.slack_bot.slack_listener_with_threads.resolve_copilot_slack_context")
+    @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
+    def test_shortcut_modal_submit_empty_instruction_uses_trigger_line(
+        self, mock_slack_api, mock_resolve, mock_valid_folder, mock_load_skill,
+    ):
+        mock_valid_folder.return_value = True
+        mock_load_skill.return_value = Skill(
+            id="reply/follow_up",
+            name="Follow Up",
+            description="Schedule periodic reminders for users in this thread.",
+            steps={"main": "body"},
+            raw_body="body",
+        )
+        app = MagicMock()
+        handler = MagicMock()
+        mock_resolve.return_value = ("T1", [])
+
+        register_copilot_shortcut(app, handler)
+        modal_fn = _get_registered_shortcut_modal_handler(app)
+
+        body = {
+            "view": {
+                "private_metadata": json.dumps({
+                    "reply_skill_folder": "follow_up",
+                    "channel_id": "C1",
+                    "message_ts": "1.0",
+                    "user_id": "U1",
+                }),
+                "state": {
+                    "values": {
+                        BLOCK_SHORTCUT_INSTRUCTION: {
+                            ACTION_SHORTCUT_INSTRUCTION_TEXT: {"value": "   "},
+                        },
+                    },
+                },
+            },
+        }
+        modal_fn(ack=MagicMock(), body=body, _client=MagicMock())
+        handler.assert_called_once()
+        assert handler.call_args[1]["user_text"] == (
+            'user asked to trigger skill "Follow Up".'
+        )
 
 
 class TestRegisterCopilotAppMention:
