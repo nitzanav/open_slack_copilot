@@ -12,6 +12,7 @@ from common.slack.slack_api import slack_api
 from common.slack.slack_bot import slack_listener, slack_listener_with_threads
 from common.slack.slack_bot.react_runner import run_react_and_confirm
 from common.slack.slack_rag import slack_rag
+from common.slack.slack_directory_rag import slack_directory_rag
 from common.tools.prompt_scheduler import reload_jobs_from_disk, shutdown_scheduler, start_scheduler
 from config.config import settings, parse_duration_seconds
 
@@ -30,12 +31,14 @@ def start():
     )
     _build_cross_channel_rags()
     _start_periodic_rag_schedules()
+    _start_directory_rag()
     start_scheduler()
     reload_jobs_from_disk()
     try:
         slack_listener.start(app)
     finally:
         slack_rag.stop_scheduler()
+        slack_directory_rag.stop_scheduler()
         shutdown_scheduler()
 
 
@@ -89,6 +92,12 @@ def _parse_update_interval(update_str: str) -> float | None:
     if len(parts) == 2 and parts[0] == "every":
         return parse_duration_seconds(parts[1])
     return None
+
+
+def _start_directory_rag():
+    """Index workspace users + user groups for ``list_users`` / semantic lookup."""
+    slack_directory_rag.build_if_missing()
+    slack_directory_rag.schedule_daily_refresh()
 
 
 if __name__ == "__main__":

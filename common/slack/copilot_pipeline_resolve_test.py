@@ -7,6 +7,7 @@ from common.slack.copilot_pipeline import (
     ThreadFetchError,
 )
 from common.tools.list_usergroup_members import LIST_USERGROUP_MEMBERS_TOOL
+from common.tools.list_users import LIST_USERS_TOOL
 from common.tools.schedule_tool import SCHEDULE_PROMPT_TOOL
 from common.tools.send_ephemeral_message import SEND_EPHEMERAL_MESSAGE_TOOL
 from common.tools.send_dm_as_app import SEND_DM_AS_APP_TOOL
@@ -76,6 +77,7 @@ class TestRunReactLoopExcludedTools:
         assert SEND_THREAD_REPLY_AS_APP_TOOL in tools_passed
         assert SEND_EPHEMERAL_MESSAGE_TOOL in tools_passed
         assert LIST_USERGROUP_MEMBERS_TOOL in tools_passed
+        assert LIST_USERS_TOOL in tools_passed
 
     @patch("common.slack.copilot_pipeline.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")

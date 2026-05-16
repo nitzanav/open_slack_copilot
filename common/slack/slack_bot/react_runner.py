@@ -106,6 +106,9 @@ def _notify_tool_receipt_line(tool_name: str, result_preview: str) -> str | None
     if isinstance(uids, list) and (tool_name or "").strip() == "list_usergroup_members":
         ug = obj.get("usergroup_id") or "?"
         return f"• {label}: {len(uids)} member(s) in `{ug}`"
+    users = obj.get("users")
+    if isinstance(users, list) and (tool_name or "").strip() == "list_users":
+        return f"• {label}: {len(users)} match(es)"
     return f"• {label}: ok"
 
 

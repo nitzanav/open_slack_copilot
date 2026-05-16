@@ -19,6 +19,7 @@ from common.tools.react_context import react_invocation_context
 from common.tools.append_csv_row import APPEND_CSV_ROW_TOOL
 from common.tools.copilot_tool import dispatch_copilot_tool as dispatch_registered_copilot_tool
 from common.tools.list_usergroup_members import LIST_USERGROUP_MEMBERS_TOOL
+from common.tools.list_users import LIST_USERS_TOOL
 from common.tools.schedule_tool import SCHEDULE_PROMPT_TOOL
 from common.tools.send_ephemeral_message import SEND_EPHEMERAL_MESSAGE_TOOL
 from common.tools.send_dm_as_app import SEND_DM_AS_APP_TOOL
@@ -40,6 +41,7 @@ _INTERACTIVE_TOOLS = [
     SEND_THREAD_REPLY_AS_APP_TOOL,
     SEND_EPHEMERAL_MESSAGE_TOOL,
     LIST_USERGROUP_MEMBERS_TOOL,
+    LIST_USERS_TOOL,
     APPEND_CSV_ROW_TOOL,
 ]
 
@@ -163,7 +165,7 @@ def run_react_loop(
         "If unsure, choose `send_thread_reply_on_behalf_of_requester`. The requester confirms in Slack "
         "before anything is posted; if user OAuth is not connected, they get instructions to connect.\n"
         "If no public thread message is needed (only scheduling/lookup tools), do not call any thread-reply tool. "
-        "Use `schedule_prompt`, `send_dm_as_app`, `list_usergroup_members`, etc., when the selected skills require them."
+        "Use `schedule_prompt`, `send_dm_as_app`, `list_usergroup_members`, `list_users`, etc., when the selected skills require them."
     )
     if bot_uid:
         tool_extra += f" Never mention `<@{bot_uid}>` in tool messages — that id is this app."

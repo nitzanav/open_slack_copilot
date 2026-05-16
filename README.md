@@ -118,7 +118,8 @@ Paste this when creating the app from a manifest:
                 "chat:write",
                 "commands",
                 "channels:history",
-                "groups:history"
+                "groups:history",
+                "usergroups:read"
             ],
             "user": [
                 "chat:write"
