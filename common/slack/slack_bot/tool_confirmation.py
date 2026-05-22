@@ -1,9 +1,9 @@
 """User confirmation for tools that require it (Slack Block Kit ephemerals).
 
-A `skill_runs` row (in the `data_layer` collection) is the source of truth for
-each pending confirmation. Slack buttons carry only the row key
-(`<thread_ts>__<action_ts>`); the row holds the tool name, payload, draft text
-and (after the loop finishes) the full run_log used for thumbs-up examples.
+A ``skill_runs`` row is keyed by ``<thread_ts>__<action_ts>`` and holds the tool
+name, payload, draft text, and optional ``conversation_id``. Slack button values
+carry ``conversation_id`` (``<skill_name>__<thread_ts>__<action_ts>``) when the
+copilot run created a persisted conversation; otherwise the legacy row key only.
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from typing import Any
 
 from slack_bolt import App
 
+from common.conversations import conversations
 from common.log import log
 from common.skill_runs import skill_runs
 from common.skill_thumbs_up import skill_thumbs_up
@@ -40,16 +41,6 @@ ACTION_TOOL_THUMBS_UP = "tool_confirm_thumbs_up"
 CALLBACK_TOOL_CONFIRM_REVISE_MODAL = "tool_confirm_revise_modal"
 BLOCK_REVISE_INPUT = "tool_confirm_revise_input"
 ACTION_REVISE_TEXT = "tool_confirm_revise_text"
-BLOCK_INCLUDE_TEXT = "tool_confirm_include_text"
-ACTION_INCLUDE_TEXT = "tool_confirm_include_text_cb"
-
-_INCLUDE_TEXT_OPTION = {
-    "text": {
-        "type": "plain_text",
-        "text": "Include original text in the revision prompt",
-    },
-    "value": "include",
-}
 
 
 def _message_body_blocks(text: str) -> list[dict]:
@@ -67,7 +58,6 @@ def _message_body_blocks(text: str) -> list[dict]:
         {
             "type": "section",
             "block_id": f"{BLOCK_BODY_PREFIX}{i}",
-            # mrkdwn so <@U…> / <#C…> / links render; plain_text shows mentions literally.
             "text": {"type": "mrkdwn", "text": chunk},
         }
         for i, chunk in enumerate(chunks)
@@ -96,7 +86,7 @@ def _build_confirmation_blocks(
     spec: ToolConfirmationSpec,
     text_content: str,
     payload: dict[str, Any],
-    row_key: str,
+    button_value: str,
 ) -> list[dict]:
     body = _message_body_blocks(text_content)
     return [
@@ -107,13 +97,13 @@ def _build_confirmation_blocks(
         },
         *_extra_params_section(spec, payload),
         *body,
-        _actions_block(spec, row_key),
+        _actions_block(spec, button_value),
     ]
 
 
-def _actions_block(spec: ToolConfirmationSpec, row_key: str) -> dict:
-    if len(row_key) > _BUTTON_VALUE_LIMIT:
-        raise ValueError("Confirmation row key too long for Slack button value.")
+def _actions_block(spec: ToolConfirmationSpec, button_value: str) -> dict:
+    if len(button_value) > _BUTTON_VALUE_LIMIT:
+        raise ValueError("Confirmation button value too long for Slack.")
     return {
         "type": "actions",
         "block_id": BLOCK_ACTIONS,
@@ -122,20 +112,20 @@ def _actions_block(spec: ToolConfirmationSpec, row_key: str) -> dict:
                 "type": "button",
                 "text": {"type": "plain_text", "text": "Revise"},
                 "action_id": ACTION_TOOL_REVISE,
-                "value": row_key,
+                "value": button_value,
             },
             {
                 "type": "button",
                 "text": {"type": "plain_text", "text": spec.confirm_button_text},
                 "style": "primary",
                 "action_id": ACTION_TOOL_CONFIRM,
-                "value": row_key,
+                "value": button_value,
             },
             {
                 "type": "button",
                 "text": {"type": "plain_text", "text": "\U0001f44d", "emoji": True},
                 "action_id": ACTION_TOOL_THUMBS_UP,
-                "value": row_key,
+                "value": button_value,
                 "accessibility_label": "This was helpful",
             },
         ],
@@ -146,11 +136,20 @@ def _row_key_from_actions(body: dict) -> str:
     return (body.get("actions") or [{}])[0].get("value") or ""
 
 
-def _ephemeral_thread_ts(body: dict) -> str | None:
-    """Thread parent ts for chat.postEphemeral after an interactive action.
+def _skill_run_row_from_interactive_key(interactive_key: str) -> dict[str, Any] | None:
+    """Resolve a Slack button value to its skill_runs row.
 
-    Ephemeral confirmation UIs often put ``thread_ts`` on ``container``, not ``message``.
+    The button value is a ``conversation_id`` for new-style flows, or a legacy
+    ``skill_runs`` row key. Conversation ids are opaque: we never parse them
+    and instead fetch the conversation row to read ``thread_ts`` / ``action_ts``.
     """
+    conv = conversations.get(interactive_key)
+    if conv:
+        return skill_runs.get(skill_runs._row_key(conv.thread_ts, conv.action_ts))
+    return skill_runs.get(interactive_key)
+
+
+def _ephemeral_thread_ts(body: dict) -> str | None:
     msg = body.get("message") or {}
     container = body.get("container") or {}
     return msg.get("thread_ts") or container.get("thread_ts") or msg.get("ts")
@@ -163,11 +162,11 @@ def _reply_ephemeral_from_action(body: dict, text: str) -> None:
     copilot_user_notify.notify_user_text(channel_id, thread_ts, user_id, text)
 
 
-def _build_tool_revise_modal_view(row_key: str) -> dict[str, Any]:
+def _build_tool_revise_modal_view(private_metadata: str) -> dict[str, Any]:
     return {
         "type": "modal",
         "callback_id": CALLBACK_TOOL_CONFIRM_REVISE_MODAL,
-        "private_metadata": row_key,
+        "private_metadata": private_metadata,
         "title": {"type": "plain_text", "text": "Revise action", "emoji": True},
         "submit": {"type": "plain_text", "text": "Submit", "emoji": True},
         "close": {"type": "plain_text", "text": "Cancel", "emoji": True},
@@ -186,37 +185,8 @@ def _build_tool_revise_modal_view(row_key: str) -> dict[str, Any]:
                 },
                 "label": {"type": "plain_text", "text": "Instruction", "emoji": True},
             },
-            {
-                "type": "input",
-                "block_id": BLOCK_INCLUDE_TEXT,
-                "optional": True,
-                "element": {
-                    "type": "checkboxes",
-                    "action_id": ACTION_INCLUDE_TEXT,
-                    "options": [_INCLUDE_TEXT_OPTION],
-                    "initial_options": [_INCLUDE_TEXT_OPTION],
-                },
-                "label": {"type": "plain_text", "text": "Options", "emoji": True},
-            },
         ],
     }
-
-
-def _checkbox_include_text_selected(values: dict[str, Any]) -> bool:
-    block = values.get(BLOCK_INCLUDE_TEXT) or {}
-    el = block.get(ACTION_INCLUDE_TEXT) or {}
-    return len(el.get("selected_options") or []) > 0
-
-
-def _compose_tool_revise_user_text(
-    instruction: str, tool_text: str, include_text: bool,
-) -> str:
-    if include_text and tool_text:
-        return (
-            f"The assistant proposed this text for a pending action:\n{tool_text}\n\n"
-            f"Revise it with this instruction:\n{instruction}"
-        )
-    return instruction
 
 
 @log
@@ -243,7 +213,8 @@ def queue_tool_confirmation(
     if not action_ts:
         return "Error: missing action_ts in invocation context."
     skill_id = inv.get("skill_id")
-    row_key = skill_runs.init_run(
+    conversation_id = (inv.get("conversation_id") or "").strip() or None
+    button_value = skill_runs.init_run(
         skill_id=skill_id,
         channel_id=channel_id,
         thread_ts=thread_ts or "",
@@ -252,9 +223,12 @@ def queue_tool_confirmation(
         tool_name=tool_name,
         payload=payload,
         text=text_content,
+        conversation_id=conversation_id,
     )
     try:
-        blocks = _build_confirmation_blocks(tool_name, spec, text_content, payload, row_key)
+        blocks = _build_confirmation_blocks(
+            tool_name, spec, text_content, payload, button_value,
+        )
     except ValueError as e:
         return f"Error: {e}"
     copilot_user_notify.notify_confirmation_blocks(
@@ -269,10 +243,10 @@ def queue_tool_confirmation(
 
 @log
 def handle_confirm_action(body: dict) -> str:
-    row_key = _row_key_from_actions(body)
-    if not row_key:
+    interactive_key = _row_key_from_actions(body)
+    if not interactive_key:
         return "Could not process this confirmation."
-    row = skill_runs.get(row_key)
+    row = _skill_run_row_from_interactive_key(interactive_key)
     if not row:
         return "This confirmation has expired."
     tool_name = str(row.get("tool_name") or "")
@@ -283,7 +257,38 @@ def handle_confirm_action(body: dict) -> str:
     payload = row.get("payload")
     if not isinstance(payload, dict):
         payload = {}
-    return _execute_confirmed_tool(tool_name, text, payload)
+    result = _execute_confirmed_tool(tool_name, text, payload)
+    conv = conversations.get(interactive_key)
+    if conv:
+        cid = conv.id or interactive_key
+        summary = (result or "").strip()[:3800]
+        conversations.append_message(
+            cid,
+            "assistant",
+            f"The user confirmed the pending action. Result: {summary}".strip(),
+        )
+        conversations.mark_waiting_for_confirmation(cid, False)
+        fresh = conversations.get(cid)
+        if fresh:
+            completed = fresh.current_or_first_step
+            nxt = fresh.next_step_after(completed)
+            if nxt is None:
+                conversations.mark_end(cid)
+            else:
+                conversations.set_current_step(cid, nxt)
+        from common.slack.conversations_driver import continue_with_invocation_context
+
+        latest = conversations.get(cid)
+        if latest and not latest.is_end:
+            continue_with_invocation_context(
+                cid,
+                tools=None,
+                excluded_tools=None,
+                tool_dispatch=None,
+                on_agent_event=None,
+                skip_next_step_intro=False,
+            )
+    return result
 
 
 def _execute_confirmed_tool(tool_name: str, text: str, payload: dict[str, Any]) -> str:
@@ -296,32 +301,32 @@ def _execute_confirmed_tool(tool_name: str, text: str, payload: dict[str, Any]) 
 @log
 def handle_revise_open_modal(body: dict, client) -> None:
     try:
-        row_key = _row_key_from_actions(body)
-        if not row_key:
+        interactive_key = _row_key_from_actions(body)
+        if not interactive_key:
             raise ValueError("Missing confirmation context.")
-        row = skill_runs.get(row_key)
+        row = _skill_run_row_from_interactive_key(interactive_key)
         if not row:
             raise ValueError("This confirmation has expired.")
         tool_name = str(row.get("tool_name") or "")
         spec = get_tool_confirmation_spec(tool_name)
         if not spec:
             raise ValueError("Unknown tool.")
-        view = _build_tool_revise_modal_view(row_key)
+        view = _build_tool_revise_modal_view(interactive_key)
         client.views_open(trigger_id=body["trigger_id"], view=view)
     except ValueError as e:
         _reply_ephemeral_from_action(body, str(e))
     except Exception:
         _reply_ephemeral_from_action(
-            body, "Could not open revise dialog. Try again."
+            body, "Could not open revise dialog. Try again.",
         )
 
 
 @log
 def handle_thumbs_up(body: dict) -> str:
-    row_key = _row_key_from_actions(body)
-    if not row_key:
+    interactive_key = _row_key_from_actions(body)
+    if not interactive_key:
         return "Could not process this thumbs-up."
-    row = skill_runs.get(row_key)
+    row = _skill_run_row_from_interactive_key(interactive_key)
     if not row:
         return "This confirmation has expired; cannot record thumbs-up."
     skill_id = row.get("skill_id")
@@ -356,9 +361,9 @@ def register_tool_confirmation_handlers(app: App) -> None:
     @app.view(CALLBACK_TOOL_CONFIRM_REVISE_MODAL)
     def _on_modal_submit(ack, body, _client):
         view = body.get("view") or {}
-        row_key = (view.get("private_metadata") or "").strip()
+        interactive_key = (view.get("private_metadata") or "").strip()
         user_id = body.get("user", {}).get("id") or ""
-        row = skill_runs.get(row_key) if row_key else None
+        row = _skill_run_row_from_interactive_key(interactive_key) if interactive_key else None
         if not row:
             ack(
                 response_action="errors",
@@ -393,13 +398,25 @@ def register_tool_confirmation_handlers(app: App) -> None:
                 errors={BLOCK_REVISE_INPUT: "Enter an instruction or cancel."},
             )
             return
-        ack()
+        conv = conversations.get(interactive_key) if interactive_key else None
+        if conv:
+            ack()
+            cid = conv.id or interactive_key
+            conversations.mark_waiting_for_confirmation(cid, False)
+            conversations.append_message(cid, "user", instruction)
+            from common.slack.conversations_driver import continue_with_invocation_context
 
-        include_text = _checkbox_include_text_selected(values)
-        tool_text = str(row.get("text") or "")
-        user_text = _compose_tool_revise_user_text(
-            instruction, tool_text, include_text,
-        )
+            continue_with_invocation_context(
+                cid,
+                tools=None,
+                excluded_tools=None,
+                tool_dispatch=None,
+                on_agent_event=None,
+                skip_next_step_intro=True,
+            )
+            return
+
+        ack()
         channel_name = slack_api.get_channel_prefixed_name(channel_id)
         from common.slack.slack_bot.react_runner import run_react_and_confirm
 
@@ -409,7 +426,7 @@ def register_tool_confirmation_handlers(app: App) -> None:
             thread_ts or "",
             user_id,
             prepare_uid,
-            user_text,
+            instruction,
             context_kind=ctx_kind,
             channel_name=channel_name,
             copilot_trigger="tool_confirm_revise",

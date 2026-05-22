@@ -6,6 +6,7 @@ from common.log import log
 from common.llm.llm_client import llm_client
 from common.skill_runs import skill_runs
 from common.skill_thumbs_up import skill_thumbs_up
+from common.skills.skill_steps import parse_steps_from_markdown
 
 SKILLS_ROOT = Path.home() / ".open_slack_copilot" / "skills"
 _SKILL_KINDS = ("reply", "watcher")
@@ -34,21 +35,21 @@ SINGLE_SELECTION_PROMPT = (
 @log
 def select_skills(
     skill_type: str, thread_messages: list[dict], user_text: str,
-) -> list[tuple[str, str]]:
-    """Stage 1: candidate skills matching the thread. Returns (id, text) pairs."""
+) -> list[tuple[str, str, dict[str, str]]]:
+    """Stage 1: candidate skills. Returns ``(id, body_text_with_examples, steps)``."""
     entries = _skill_entries_for_kind(skill_type)
     if not entries:
         return []
 
     thread_context = _summarize_context(thread_messages, user_text)
-    skill_list = "\n".join(f"- {ref}" for ref, _ in entries)
+    skill_list = "\n".join(f"- {ref}" for ref, _, _ in entries)
     prompt = SELECTION_PROMPT.format(skill_list=skill_list, thread_context=thread_context)
 
     response = llm_client.generate(prompt)
-    valid_refs = [ref for ref, _ in entries]
+    valid_refs = [ref for ref, _, _ in entries]
     selected_refs = _parse_selection(response, valid_refs)
-    by_ref = dict(entries)
-    return [(ref, by_ref[ref]) for ref in selected_refs if ref in by_ref]
+    by_ref = {ref: (ref, body, steps) for ref, body, steps in entries}
+    return [by_ref[ref] for ref in selected_refs if ref in by_ref]
 
 
 def is_safe_reply_skill_folder_name(name: str) -> bool:
@@ -57,7 +58,8 @@ def is_safe_reply_skill_folder_name(name: str) -> bool:
     return bool(n) and _REPLY_SKILL_FOLDER_NAME_RE.match(n) is not None
 
 
-def load_forced_reply_skill(skill_folder: str) -> tuple[str, str] | None:
+@log
+def load_forced_reply_skill(skill_folder: str) -> tuple[str, str, dict[str, str]] | None:
     """Load ``reply/<skill_folder>/SKILL.md`` when present.
 
     ``skill_folder`` is the directory name under ``~/.open_slack_copilot/skills/reply/``
@@ -70,15 +72,17 @@ def load_forced_reply_skill(skill_folder: str) -> tuple[str, str] | None:
     if not d.is_dir() or not (d / "SKILL.md").is_file():
         return None
     ref = f"reply/{cid}"
-    skill_text = (d / "SKILL.md").read_text().strip()
-    return ref, _with_examples(ref, skill_text)
+    raw = (d / "SKILL.md").read_text().strip()
+    steps, body = parse_steps_from_markdown(raw)
+    body_ex = _with_examples(ref, body)
+    return ref, body_ex, steps
 
 
 @log
 def select_single_skill(
     skill_type: str, thread_messages: list[dict], user_text: str,
-) -> tuple[str, str] | None:
-    """Stage 2: pick exactly one skill (LLM call). Returns (id, text) or None if none installed."""
+) -> tuple[str, str, dict[str, str]] | None:
+    """Stage 2: pick exactly one skill (LLM call). Returns ``(id, body_with_examples, steps)``."""
     candidates = select_skills(skill_type, thread_messages, user_text)
     if not candidates:
         candidates = _skill_entries_for_kind(skill_type)
@@ -88,31 +92,33 @@ def select_single_skill(
         return candidates[0]
 
     thread_context = _summarize_context(thread_messages, user_text)
-    skill_list = "\n".join(f"- {ref}" for ref, _ in candidates)
+    skill_list = "\n".join(f"- {ref}" for ref, _, _ in candidates)
     prompt = SINGLE_SELECTION_PROMPT.format(
         skill_list=skill_list, thread_context=thread_context,
     )
-    valid_refs = [ref for ref, _ in candidates]
+    valid_refs = [ref for ref, _, _ in candidates]
     response = (llm_client.generate(prompt) or "").strip()
     picked_id = _parse_single_selection(response, valid_refs)
-    by_ref = dict(candidates)
+    by_ref = {ref: (ref, body, steps) for ref, body, steps in candidates}
     if picked_id and picked_id in by_ref:
-        return picked_id, by_ref[picked_id]
+        return by_ref[picked_id]
     return candidates[0]
 
 
-def _skill_entries_for_kind(kind: str) -> list[tuple[str, str]]:
+def _skill_entries_for_kind(kind: str) -> list[tuple[str, str, dict[str, str]]]:
     if kind not in _SKILL_KINDS:
         return []
     base = SKILLS_ROOT / kind
     if not base.is_dir():
         return []
-    out: list[tuple[str, str]] = []
+    out: list[tuple[str, str, dict[str, str]]] = []
     for d in base.iterdir():
         if d.is_dir() and (d / "SKILL.md").is_file():
             ref = f"{kind}/{d.name}"
-            skill_text = (d / "SKILL.md").read_text().strip()
-            out.append((ref, _with_examples(ref, skill_text)))
+            raw = (d / "SKILL.md").read_text().strip()
+            steps, body = parse_steps_from_markdown(raw)
+            body_ex = _with_examples(ref, body)
+            out.append((ref, body_ex, steps))
     return out
 
 

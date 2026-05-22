@@ -28,7 +28,7 @@ class TestSkillEntriesForKind:
 
         with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
             entries = _skill_entries_for_kind("reply")
-            refs = {ref for ref, _ in entries}
+            refs = {ref for ref, _, _ in entries}
             assert refs == {"reply/polite_reply", "reply/code_review"}
 
     def test_ignores_other_kinds(self, tmp_path):
@@ -84,7 +84,10 @@ class TestSelectSkills:
 
         with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
             result = select_skills("reply", THREAD, "")
-            assert result == [("reply/polite_reply", "Be polite.")]
+            assert len(result) == 1
+            assert result[0][0] == "reply/polite_reply"
+            assert result[0][1] == "Be polite."
+            assert result[0][2] == {"main": "Be polite."}
             mock_llm.generate.assert_called_once()
 
     @patch("common.progressive_disclosure.progressive_disclosure.llm_client")
@@ -99,7 +102,7 @@ class TestSelectSkills:
 
         with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
             result = select_skills("reply", THREAD, "")
-            texts = {text for _, text in result}
+            texts = {t[1] for t in result}
             assert texts == {"Skill A", "Skill B"}
 
     @patch("common.progressive_disclosure.progressive_disclosure.llm_client")
@@ -117,7 +120,9 @@ class TestSelectSkills:
 
         with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
             result = select_skills("reply", THREAD, "")
-            assert result == [("reply/r1", "Reply skill")]
+            assert len(result) == 1
+            assert result[0][0] == "reply/r1"
+            assert result[0][1] == "Reply skill"
             prompt = mock_llm.generate.call_args[0][0]
             assert "watcher/w1" not in prompt
 
@@ -166,7 +171,10 @@ class TestSelectSingleSkill:
         mock_llm.generate.return_value = '["reply/only_one"]'
         with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
             picked = select_single_skill("reply", THREAD, "")
-            assert picked == ("reply/only_one", "Only one.")
+            assert picked is not None
+            assert picked[0] == "reply/only_one"
+            assert picked[1] == "Only one."
+            assert picked[2] == {"main": "Only one."}
             assert mock_llm.generate.call_count == 1
 
     @patch("common.progressive_disclosure.progressive_disclosure.llm_client")
@@ -182,7 +190,9 @@ class TestSelectSingleSkill:
         ]
         with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
             picked = select_single_skill("reply", THREAD, "")
-            assert picked == ("reply/sk_b", "B")
+            assert picked is not None
+            assert picked[0] == "reply/sk_b"
+            assert picked[1] == "B"
 
     @patch("common.progressive_disclosure.progressive_disclosure.llm_client")
     def test_stage2_parse_failure_falls_back_to_first(self, mock_llm, tmp_path):
@@ -209,7 +219,9 @@ class TestSelectSingleSkill:
         mock_llm.generate.return_value = "[]"
         with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
             picked = select_single_skill("reply", THREAD, "")
-            assert picked == ("reply/only_one", "Only one.")
+            assert picked is not None
+            assert picked[0] == "reply/only_one"
+            assert picked[1] == "Only one."
 
 
 class TestExamplesInjection:
@@ -230,7 +242,7 @@ class TestExamplesInjection:
             skill_thumbs_up.add_reference("reply/foo", "T1", "A1")
             entries = _skill_entries_for_kind("reply")
             assert len(entries) == 1
-            _, text = entries[0]
+            _, text, _steps = entries[0]
             assert "Be foo." in text
             assert "## Examples (recent good runs)" in text
             assert "Hello world." in text
@@ -243,3 +255,4 @@ class TestExamplesInjection:
              patch("common.skill_thumbs_up.skill_thumbs_up.SKILLS_ROOT", skills_root):
             entries = _skill_entries_for_kind("reply")
             assert entries[0][1] == "Be foo."
+            assert entries[0][2] == {"main": "Be foo."}

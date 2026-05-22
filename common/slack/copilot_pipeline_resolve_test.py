@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
+from common.conversations.conversations import Conversation
 from common.llm.llm_client.llm_client import AgentToolLoopResult, ToolCallRecord
 from common.skill_runs import skill_runs
 from common.slack.copilot_pipeline import (
@@ -9,13 +10,6 @@ from common.slack.copilot_pipeline import (
     resolve_copilot_slack_context,
     ThreadFetchError,
 )
-
-
-@pytest.fixture
-def isolated_data_root(tmp_path):
-    from config.config import settings
-    settings.set("data_layer.root", str(tmp_path))
-    yield tmp_path
 from common.tools.list_usergroup_members import LIST_USERGROUP_MEMBERS_TOOL
 from common.tools.list_users import LIST_USERS_TOOL
 from common.tools.schedule_tool import SCHEDULE_PROMPT_TOOL
@@ -25,6 +19,18 @@ from common.tools.send_thread_reply_as_app import SEND_THREAD_REPLY_AS_APP_TOOL
 from common.tools.send_thread_reply_on_behalf_of_requester import (
     SEND_THREAD_REPLY_ON_BEHALF_OF_REQUESTER_TOOL,
 )
+
+
+def _main_step(instruction: str) -> dict[str, str]:
+    return {"main": instruction}
+
+
+@pytest.fixture(autouse=True)
+def _isolated_data_layer(tmp_path):
+    from config.config import settings
+
+    settings.set("data_layer.root", str(tmp_path))
+    yield
 
 
 class TestResolveCopilotSlackContext:
@@ -59,27 +65,38 @@ class TestResolveCopilotSlackContext:
 
 
 class TestRunReactLoopExcludedTools:
+    @patch("common.slack.copilot_pipeline.run_conversation_driver")
     @patch("common.slack.copilot_pipeline.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.select_skill")
-    @patch("common.slack.copilot_pipeline.llm_client")
     @patch("common.slack.copilot_pipeline.slack_api")
     def test_excluded_tools_omit_schedule_keep_others(
-        self, mock_slack, mock_llm, mock_select_skill, mock_rag, mock_fetch,
+        self, mock_slack, mock_select_skill, mock_rag, mock_fetch, mock_driver,
     ):
-        mock_select_skill.return_value = ("reply/default", "default")
+        mock_select_skill.return_value = ("reply/default", "default", _main_step("default"))
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []
         mock_rag.query_cross_channel.return_value = []
-        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult("ok", [])
         mock_fetch.return_value = [{"text": "x"}]
+        captured: list[list] = []
+
+        def _fake_driver(
+            conversation_id, *, tools, excluded_tools, tool_dispatch, on_agent_event,
+            skip_next_step_intro,
+        ):
+            import common.slack.copilot_pipeline as cp
+
+            captured.append(cp._resolve_tools(tools, excluded_tools))
+            return AgentToolLoopResult("ok", []), {}
+
+        mock_driver.side_effect = _fake_driver
 
         run_react_loop(
             "C", "T1", "U1", "",
             excluded_tools=[SCHEDULE_PROMPT_TOOL],
         )
-        tools_passed = mock_llm.agent_tool_loop.call_args[0][2]
+        tools_passed = captured[0]
         assert SCHEDULE_PROMPT_TOOL not in tools_passed
         assert SEND_DM_AS_APP_TOOL in tools_passed
         assert SEND_THREAD_REPLY_ON_BEHALF_OF_REQUESTER_TOOL in tools_passed
@@ -88,24 +105,35 @@ class TestRunReactLoopExcludedTools:
         assert LIST_USERGROUP_MEMBERS_TOOL in tools_passed
         assert LIST_USERS_TOOL in tools_passed
 
+    @patch("common.slack.copilot_pipeline.run_conversation_driver")
     @patch("common.slack.copilot_pipeline.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.select_skill")
-    @patch("common.slack.copilot_pipeline.llm_client")
     @patch("common.slack.copilot_pipeline.slack_api")
     def test_both_thread_reply_tools_always_exposed(
-        self, mock_slack, mock_llm, mock_select_skill, mock_rag, mock_fetch,
+        self, mock_slack, mock_select_skill, mock_rag, mock_fetch, mock_driver,
     ):
-        mock_select_skill.return_value = ("reply/default", "default")
+        mock_select_skill.return_value = ("reply/default", "default", _main_step("default"))
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []
         mock_rag.query_cross_channel.return_value = []
-        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult("ok", [])
         mock_fetch.return_value = [{"text": "x"}]
+        captured: list[list] = []
+
+        def _fake_driver(
+            conversation_id, *, tools, excluded_tools, tool_dispatch, on_agent_event,
+            skip_next_step_intro,
+        ):
+            import common.slack.copilot_pipeline as cp
+
+            captured.append(cp._resolve_tools(tools, excluded_tools))
+            return AgentToolLoopResult("ok", []), {}
+
+        mock_driver.side_effect = _fake_driver
 
         for action in (None, "send_thread_reply_on_behalf_of_requester"):
-            mock_llm.agent_tool_loop.reset_mock()
+            captured.clear()
             run_react_loop(
                 "C",
                 "T1",
@@ -114,31 +142,34 @@ class TestRunReactLoopExcludedTools:
                 copilot_trigger="app_mention" if action else None,
                 copilot_action=action,
             )
-            tools_passed = mock_llm.agent_tool_loop.call_args[0][2]
+            tools_passed = captured[0]
             assert SEND_THREAD_REPLY_AS_APP_TOOL in tools_passed, action
             assert SEND_THREAD_REPLY_ON_BEHALF_OF_REQUESTER_TOOL in tools_passed, action
 
 
 class TestRunReactLoopToolErrorsInOutput:
+    @patch("common.slack.copilot_pipeline.run_conversation_driver")
     @patch("common.slack.copilot_pipeline.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.select_skill")
-    @patch("common.slack.copilot_pipeline.llm_client")
     @patch("common.slack.copilot_pipeline.slack_api")
     def test_appends_tool_errors_to_output_text(
-        self, mock_slack, mock_llm, mock_select_skill, mock_rag, mock_fetch,
+        self, mock_slack, mock_select_skill, mock_rag, mock_fetch, mock_driver,
     ):
-        mock_select_skill.return_value = ("reply/default", "default")
+        mock_select_skill.return_value = ("reply/default", "default", _main_step("default"))
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []
         mock_rag.query_cross_channel.return_value = []
-        mock_llm.agent_tool_loop.return_value = AgentToolLoopResult(
-            "Draft body.",
-            [],
-            tool_errors=[
-                "send_dm_as_app: Error: requester_user_id is required to show confirmation.",
-            ],
+        mock_driver.return_value = (
+            AgentToolLoopResult(
+                "Draft body.",
+                [],
+                tool_errors=[
+                    "send_dm_as_app: Error: requester_user_id is required to show confirmation.",
+                ],
+            ),
+            Conversation(),
         )
         mock_fetch.return_value = [{"text": "x"}]
 
@@ -151,15 +182,15 @@ class TestRunReactLoopToolErrorsInOutput:
 
 
 class TestRunReactLoopEnrichesSkillRunsRow:
+    @patch("common.slack.copilot_pipeline.run_conversation_driver")
     @patch("common.slack.copilot_pipeline.fetch_thread_messages")
     @patch("common.slack.copilot_pipeline.slack_rag")
     @patch("common.slack.copilot_pipeline.select_skill")
-    @patch("common.slack.copilot_pipeline.llm_client")
     @patch("common.slack.copilot_pipeline.slack_api")
     def test_enriches_existing_row_with_run_log(
-        self, mock_slack, mock_llm, mock_select_skill, mock_rag, mock_fetch, isolated_data_root,
+        self, mock_slack, mock_select_skill, mock_rag, mock_fetch, mock_driver,
     ):
-        mock_select_skill.return_value = ("reply/x", "x")
+        mock_select_skill.return_value = ("reply/x", "x", _main_step("x"))
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = []
         mock_rag.missing_channels.return_value = []
@@ -168,26 +199,36 @@ class TestRunReactLoopEnrichesSkillRunsRow:
 
         captured_action_ts: list[str] = []
 
-        def fake_agent_tool_loop(*_args, **_kw):
+        def fake_driver(
+            conversation_id, *, tools, excluded_tools, tool_dispatch, on_agent_event,
+            skip_next_step_intro,
+        ):
             from common.tools.react_context import get_invocation
+
             inv = get_invocation() or {}
             captured_action_ts.append(str(inv.get("action_ts") or ""))
             ts = inv.get("thread_ts") or ""
             at = inv.get("action_ts") or ""
             sid = inv.get("skill_id")
             skill_runs.init_run(
-                skill_id=sid, channel_id=inv["channel_id"], thread_ts=ts,
-                action_ts=at, requester_user_id=inv["user_id"],
-                tool_name="send_dm_as_app", payload={"target_user_id": "U2"},
+                skill_id=sid,
+                channel_id=inv["channel_id"],
+                thread_ts=ts,
+                action_ts=at,
+                requester_user_id=inv["user_id"],
+                tool_name="send_dm_as_app",
+                payload={"target_user_id": "U2"},
                 text="draft body",
+                conversation_id=inv.get("conversation_id"),
             )
             return AgentToolLoopResult(
                 "ok",
                 [ToolCallRecord("send_dm_as_app", '{"status":"tool_confirmation_requested"}')],
                 [],
-            )
+                waiting_for_confirmation=True,
+            ), {}
 
-        mock_llm.agent_tool_loop.side_effect = fake_agent_tool_loop
+        mock_driver.side_effect = fake_driver
 
         run_react_loop("C", "T1", "U_PREP", "hi")
 

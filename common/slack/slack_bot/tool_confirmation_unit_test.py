@@ -94,7 +94,7 @@ def test_actions_block_has_thumbs_up_button():
     assert thumbs["value"] == "R1"
 
 
-def test_action_buttons_carry_only_row_key():
+def test_action_buttons_carry_conversation_or_row_key():
     blocks = _sample_blocks("hi", row_key="thread_ts__action_ts")
     for e in blocks[-1]["elements"]:
         assert e["value"] == "thread_ts__action_ts"
@@ -118,17 +118,21 @@ def test_build_blocks_rejects_overflow():
 
 
 def test_queue_tool_confirmation_persists_row_and_uses_row_key(isolated_data_root):
+    from common.conversations import conversations as conv_mod
+
     payload = {
         "target_user_id": "U_RECIPIENT",
         "channel_id": "C1",
         "thread_ts": "1.0",
         "prepare_user_id": "U_PREP",
     }
+    cid = conv_mod.make_conversation_id()
     with patch("common.slack.slack_bot.tool_confirmation.copilot_user_notify") as notify, \
          react_invocation_context(
             "C1", "1.0", "U_PREP",
             skill_id="reply/draft_thread_reply",
             action_ts="2026-05-10T00:00:00+00:00",
+            conversation_id=cid,
          ):
         out = tc.queue_tool_confirmation(
             tool_name="send_dm_as_app",
@@ -142,10 +146,11 @@ def test_queue_tool_confirmation_persists_row_and_uses_row_key(isolated_data_roo
     notify.notify_confirmation_blocks.assert_called_once()
     blocks = notify.notify_confirmation_blocks.call_args[0][4]
     actions = blocks[-1]["elements"]
-    row_key = actions[0]["value"]
-    assert row_key == "1.0__2026-05-10T00:00:00+00:00"
-    row = skill_runs.get(row_key)
+    button_value = actions[0]["value"]
+    assert button_value == cid
+    row = skill_runs.get(skill_runs._row_key("1.0", "2026-05-10T00:00:00+00:00"))
     assert row is not None
+    assert row.get("conversation_id") == cid
     assert row["tool_name"] == "send_dm_as_app"
     assert row["text"] == "hello"
     assert row["payload"]["target_user_id"] == "U_RECIPIENT"

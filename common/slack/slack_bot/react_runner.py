@@ -271,7 +271,9 @@ def _post_loop_ephemeral(
     recipient_user_id: str,
     loop_out: ReactLoopResult,
 ) -> None:
-    confirm_pending = _trace_shows_confirm_ui_pending(loop_out.tool_trace)
+    confirm_pending = bool(
+        getattr(loop_out, "is_waiting_for_confirmation", False),
+    ) or _trace_shows_confirm_ui_pending(loop_out.tool_trace)
     body = _compose_post_loop_message(
         loop_out, include_assistant_text=not confirm_pending,
     )

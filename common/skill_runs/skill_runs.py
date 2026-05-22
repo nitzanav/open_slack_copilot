@@ -33,6 +33,7 @@ def init_run(
     tool_name: str,
     payload: dict[str, Any],
     text: str,
+    conversation_id: str | None = None,
 ) -> str:
     key = _row_key(thread_ts, action_ts)
     row = {
@@ -44,9 +45,10 @@ def init_run(
         "tool_name": tool_name,
         "payload": payload,
         "text": text,
+        "conversation_id": conversation_id,
     }
     _collection().set(key, row)
-    return key
+    return (conversation_id or key).strip()
 
 
 def enrich_with_run_log(key: str, run_log: dict[str, Any]) -> None:
