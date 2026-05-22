@@ -16,6 +16,7 @@ from common.slack.slack_api import slack_api
 from common.slack.slack_rag import slack_rag
 from common.slack.thread_format import format_slack_thread_for_prompt
 from common.tools.react_context import react_invocation_context
+from common.tools.append_csv_row import APPEND_CSV_ROW_TOOL
 from common.tools.copilot_tool import dispatch_copilot_tool as dispatch_registered_copilot_tool
 from common.tools.list_usergroup_members import LIST_USERGROUP_MEMBERS_TOOL
 from common.tools.schedule_tool import SCHEDULE_PROMPT_TOOL
@@ -39,6 +40,7 @@ _INTERACTIVE_TOOLS = [
     SEND_THREAD_REPLY_AS_APP_TOOL,
     SEND_EPHEMERAL_MESSAGE_TOOL,
     LIST_USERGROUP_MEMBERS_TOOL,
+    APPEND_CSV_ROW_TOOL,
 ]
 
 
