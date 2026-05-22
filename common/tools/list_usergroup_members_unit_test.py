@@ -13,6 +13,12 @@ class TestListUsergroupMembersToolSchema:
         req = t["function"]["parameters"]["required"]
         assert req == ["usergroup"]
 
+    def test_schema_directs_individual_slack_users_to_list_users(self):
+        """Regression: model must not call this tool with <@U…>; use list_users instead."""
+        desc = lugm.LIST_USERGROUP_MEMBERS_TOOL["function"]["description"]
+        assert "list_users" in desc
+        assert "U" in desc and "S" in desc
+
 
 class TestHandleListUsergroupMembersCall:
     @patch("common.tools.list_usergroup_members.slack_api.list_usergroup_members")
