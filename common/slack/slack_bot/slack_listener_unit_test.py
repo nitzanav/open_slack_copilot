@@ -146,6 +146,7 @@ class TestRegisterCopilotShortcut:
         )
         assert "placeholder" in el
         assert instr.get("hint")
+        mock_load_skill.assert_called_once()
         meta = json.loads(view["private_metadata"])
         assert meta == {
             "reply_skill_folder": "draft_with_copilot",
@@ -195,6 +196,7 @@ class TestRegisterCopilotShortcut:
         )
         el = instr["element"]
         assert el["initial_value"] == 'user asked to trigger skill "Follow Up".'
+        mock_load_skill.assert_called_once()
         mock_load_skill.assert_called_with("follow_up")
 
     @patch("common.slack.slack_bot.slack_listener_with_threads.reply_skill_folder_from_slack_message_shortcut")
