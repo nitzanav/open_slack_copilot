@@ -20,6 +20,7 @@ import pytest
 from common.log import get_test_logger
 from common.llm.llm_apis.types import ChatCompletionTurn, NormalizedToolCall
 from tests.e2e_use_cases.llm_fake_backend import FakeCompletionBackend, assert_llm_input_token_budget
+from common.slack.mrkdwn_convert import to_slack_mrkdwn
 from common.slack.slack_bot import tool_confirmation as tc
 
 import common.tools.send_thread_reply_on_behalf_of_requester  # noqa: F401 — registers tool
@@ -364,7 +365,9 @@ def _system_prompt_text(messages: list[dict]) -> str:
 
 def assert_revise_rerun_uses_proposed_text(ctx: SummarizeReviseE2EContext) -> None:
     revise_system = _system_prompt_text(ctx.fake_backend.complete_calls[2])
-    assert FIRST_SUMMARY_DRAFT[:80] in revise_system, "revise system prompt includes first draft"
+    assert to_slack_mrkdwn(FIRST_SUMMARY_DRAFT)[:80] in revise_system, (
+        "revise system prompt includes first draft"
+    )
     assert REVISE_INSTRUCTION in revise_system, "revise system prompt includes instruction"
     _log_ok("revise prompt wired")
 
@@ -374,7 +377,7 @@ def assert_second_confirm_ui_shows_brief_summary(ctx: SummarizeReviseE2EContext)
     blocks = ctx.mock_slack.send_ephemeral_blocks.call_args_list[1][0][4]
     draft = _draft_text_from_blocks(blocks)
     assert "Offsite — short version" in draft, "revised draft is brief summary"
-    assert "**Friday survey**" in draft, "revised draft uses short labels"
+    assert "*Friday survey*" in draft, "revised draft uses short labels (Slack mrkdwn)"
     confirm_value = _confirm_button_value_from_blocks(blocks)
     _log_ok("second confirm ephemeral")
     return confirm_value
@@ -390,7 +393,7 @@ def assert_user_confirm_posts_revised_summary_on_behalf(
 ) -> None:
     simulate_send_thread_reply_button_click(ctx, confirm_value)
     ctx.mock_slack.post_thread_message_on_behalf_of_requester.assert_called_once_with(
-        C_TEST, TS_ROOT, REVISED_SUMMARY_DRAFT, U_USER1,
+        C_TEST, TS_ROOT, to_slack_mrkdwn(REVISED_SUMMARY_DRAFT), U_USER1,
     )
     _log_ok("post_thread_message_on_behalf_of_requester with revised summary")
 
