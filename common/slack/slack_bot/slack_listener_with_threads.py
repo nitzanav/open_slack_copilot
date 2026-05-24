@@ -8,9 +8,9 @@ from common.slack import copilot_user_notify
 from common.slack.copilot_pipeline import (
     MESSAGE_SHORTCUT_CALLBACK_PATTERN,
     ThreadFetchError,
-    load_forced_reply_skill,
+    load_forced_skill,
     parse_copilot_shortcut_callback_id,
-    reply_skill_folder_valid_for_forced_modal,
+    skill_folder_valid_for_forced_modal,
     resolve_copilot_slack_context,
 )
 from common.progressive_disclosure.progressive_disclosure import SKILLS_ROOT
@@ -27,12 +27,12 @@ _MENTION_TOKEN_RE = re.compile(r"<@[^>]+>\s*")
 CALLBACK_COPILOT_SHORTCUT_DRAFT_MODAL = "copilot_shortcut_draft_modal"
 BLOCK_SHORTCUT_INSTRUCTION = "copilot_shortcut_instruction"
 ACTION_SHORTCUT_INSTRUCTION_TEXT = "copilot_shortcut_instruction_text"
-def _instruction_default_for_message_shortcut(reply_skill_folder: str) -> str:
-    """Minimal user text naming which reply skill the shortcut invoked."""
-    folder = (reply_skill_folder or "").strip()
-    loaded = load_forced_reply_skill(folder)
+def _instruction_default_for_message_shortcut(skill_folder: str) -> str:
+    """Minimal user text naming which skill the shortcut invoked."""
+    folder = (skill_folder or "").strip()
+    loaded = load_forced_skill(folder)
     skill_text = loaded[1] if loaded else None
-    display_name = progressive_disclosure.reply_skill_display_name(folder, skill_text)
+    display_name = progressive_disclosure.skill_display_name(folder, skill_text)
     safe = display_name.replace('"', "'")
     return f'user asked to trigger skill "{safe}".'
 
@@ -105,6 +105,7 @@ def register_copilot_command(app: App, handler):
             context_kind="thread",
             copilot_trigger="slash_command",
             copilot_action="send_thread_reply_on_behalf_of_requester",
+            anchor_message_text=user_text,
         )
 
 
@@ -114,10 +115,11 @@ def _shortcut_draft_modal_metadata(
     thread_ts: str | None,
     user_id: str,
     channel_name: str | None,
-    reply_skill_folder: str,
+    skill_folder: str,
+    anchor_message_text: str | None = None,
 ) -> str:
     payload = {
-        "reply_skill_folder": reply_skill_folder,
+        "skill_folder": skill_folder,
         "channel_id": channel_id,
         "message_ts": message_ts,
         "user_id": user_id,
@@ -126,6 +128,9 @@ def _shortcut_draft_modal_metadata(
         payload["thread_ts"] = thread_ts
     if channel_name is not None:
         payload["channel_name"] = channel_name
+    anchor = (anchor_message_text or "").strip()
+    if anchor:
+        payload["anchor_message_text"] = anchor
     return json.dumps(payload, separators=(",", ":"))
 
 
@@ -191,10 +196,10 @@ def register_copilot_shortcut(app: App, handler):
     def handle_copilot_message_shortcut(ack, shortcut, client):
         ack()
         shortcut_callback_id = str(shortcut.get("callback_id") or "").strip()
-        reply_skill_folder = parse_copilot_shortcut_callback_id(
+        skill_folder = parse_copilot_shortcut_callback_id(
             shortcut_callback_id,
         )
-        if reply_skill_folder is None:
+        if skill_folder is None:
             return
         channel_id = shortcut["channel"]["id"]
         user_id = shortcut["user"]["id"]
@@ -202,10 +207,10 @@ def register_copilot_shortcut(app: App, handler):
         response_url = shortcut.get("response_url")
         anchor_fallback = message.get("thread_ts") or message["ts"]
 
-        if not reply_skill_folder_valid_for_forced_modal(reply_skill_folder):
+        if not skill_folder_valid_for_forced_modal(skill_folder):
             _send_missing_skill_error(
                 channel_id, anchor_fallback, user_id, response_url,
-                reply_skill_folder,
+                skill_folder,
             )
             return
 
@@ -215,16 +220,18 @@ def register_copilot_shortcut(app: App, handler):
             _send_channel_error(channel_id, anchor_fallback, user_id, response_url)
             return
 
+        anchor_text = _strip_app_mention_tokens(message.get("text", ""))
         meta = _shortcut_draft_modal_metadata(
             channel_id,
             message["ts"],
             message.get("thread_ts"),
             user_id,
             shortcut["channel"].get("name"),
-            reply_skill_folder,
+            skill_folder,
+            anchor_message_text=anchor_text,
         )
         initial_instruction = _instruction_default_for_message_shortcut(
-            reply_skill_folder,
+            skill_folder,
         )
         view = _build_shortcut_draft_modal_view(meta, initial_instruction)
         try:
@@ -258,8 +265,8 @@ def register_copilot_shortcut(app: App, handler):
                 },
             )
             return
-        reply_skill_folder = str(meta.get("reply_skill_folder") or "").strip()
-        if not reply_skill_folder_valid_for_forced_modal(reply_skill_folder):
+        skill_folder = str(meta.get("skill_folder") or "").strip()
+        if not skill_folder_valid_for_forced_modal(skill_folder):
             ack(
                 response_action="errors",
                 errors={
@@ -288,7 +295,7 @@ def register_copilot_shortcut(app: App, handler):
         instruction = (el.get("value") or "").strip()
         if not instruction:
             instruction = _instruction_default_for_message_shortcut(
-                reply_skill_folder,
+                skill_folder,
             )
         try:
             anchor_ts, thread_messages = resolve_copilot_slack_context(
@@ -312,6 +319,7 @@ def register_copilot_shortcut(app: App, handler):
         context_kind = (
             "channel_tail" if not message.get("thread_ts") else "thread"
         )
+        anchor_message_text = str(meta.get("anchor_message_text") or "").strip() or None
         ack()
         handler(
             channel_id=channel_id,
@@ -323,7 +331,8 @@ def register_copilot_shortcut(app: App, handler):
             context_kind=context_kind,
             copilot_trigger="message_shortcut",
             copilot_action="send_thread_reply_on_behalf_of_requester",
-            forced_reply_skill_folder=reply_skill_folder,
+            forced_skill_folder=skill_folder,
+            anchor_message_text=anchor_message_text,
         )
 
 
@@ -369,6 +378,7 @@ def register_copilot_app_mention(app: App, handler, bot_user_id: str | None = No
             context_kind=context_kind,
             copilot_trigger="app_mention",
             copilot_action="send_thread_reply_on_behalf_of_requester",
+            anchor_message_text=user_text,
         )
 
 
@@ -396,11 +406,11 @@ def _send_missing_skill_error(
     thread_ts: str,
     user_id: str,
     response_url: str | None,
-    reply_skill_folder: str,
+    skill_folder: str,
 ) -> None:
-    expected_path = SKILLS_ROOT / "reply" / reply_skill_folder / "SKILL.md"
+    expected_path = SKILLS_ROOT / skill_folder / "SKILL.md"
     msg = (
-        f"Skill not installed: `reply/{reply_skill_folder}`.\n"
+        f"Skill not installed: `{skill_folder}`.\n"
         f"Expected `{expected_path}`. "
         "Add the SKILL.md or run `./install_skill_examples.sh`, then retry."
     )

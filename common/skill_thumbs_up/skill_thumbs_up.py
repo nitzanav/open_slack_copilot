@@ -19,11 +19,10 @@ _MAX_KEPT = 200
 
 
 def _skill_dir(skill_id: str) -> Path | None:
-    parts = (skill_id or "").strip().split("/", 1)
-    if len(parts) != 2 or not parts[0] or not parts[1]:
+    name = (skill_id or "").strip()
+    if not name or "/" in name:
         return None
-    kind, name = parts
-    return SKILLS_ROOT / kind / name
+    return SKILLS_ROOT / name
 
 
 def _thumbs_up_path(skill_id: str) -> Path | None:

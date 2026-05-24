@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 
 from common.progressive_disclosure.progressive_disclosure import (
-    select_skills, get_default_instruction, _skill_entries_for_kind, _parse_selection,
+    select_skills, get_default_instruction, _skill_entries, _parse_selection,
     _BUNDLED_DEFAULT_INSTRUCTION,
 )
 
@@ -17,35 +17,27 @@ THREAD = [
 ]
 
 
-class TestSkillEntriesForKind:
-    def test_loads_reply_skills(self, tmp_path):
-        reply = tmp_path / "reply"
-        reply.mkdir()
+class TestSkillEntries:
+    def test_loads_skills(self, tmp_path):
         for name in ("polite_reply", "code_review"):
-            (reply / name).mkdir()
-            (reply / name / "SKILL.md").write_text(f"{name} content")
+            (tmp_path / name).mkdir()
+            (tmp_path / name / "SKILL.md").write_text(f"{name} content")
 
         with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
-            entries = _skill_entries_for_kind("reply")
+            entries = _skill_entries()
             refs = {ref for ref, _ in entries}
-            assert refs == {"reply/polite_reply", "reply/code_review"}
+            assert refs == {"polite_reply", "code_review"}
 
-    def test_ignores_other_kinds(self, tmp_path):
-        watcher = tmp_path / "watcher"
-        watcher.mkdir()
-        (watcher / "check").mkdir()
-        (watcher / "check" / "SKILL.md").write_text("watcher skill")
+    def test_ignores_dirs_without_skill_md(self, tmp_path):
+        (tmp_path / "empty").mkdir()
 
         with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
-            assert _skill_entries_for_kind("reply") == []
-
-    def test_invalid_kind(self, tmp_path):
-        with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
-            assert _skill_entries_for_kind("unknown") == []
+            assert _skill_entries() == []
 
     def test_missing_dir(self, tmp_path):
-        with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
-            assert _skill_entries_for_kind("reply") == []
+        missing = tmp_path / "no_skills"
+        with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", missing):
+            assert _skill_entries() == []
 
 
 class TestParseSelection:
@@ -74,77 +66,52 @@ class TestParseSelection:
 class TestSelectSkills:
     @patch("common.progressive_disclosure.progressive_disclosure.llm_client")
     def test_select_single_skill(self, mock_llm, tmp_path):
-        skill_dir = tmp_path / "reply"
-        skill_dir.mkdir()
-        (skill_dir / "polite_reply").mkdir()
-        (skill_dir / "polite_reply" / "SKILL.md").write_text("Be polite.")
+        (tmp_path / "polite_reply").mkdir()
+        (tmp_path / "polite_reply" / "SKILL.md").write_text("Be polite.")
 
-        mock_llm.generate.return_value = '["reply/polite_reply"]'
+        mock_llm.generate.return_value = '["polite_reply"]'
 
         with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
-            result = select_skills("reply", THREAD, "")
+            result = select_skills(THREAD, "")
             assert result == ["Be polite."]
             mock_llm.generate.assert_called_once()
 
     @patch("common.progressive_disclosure.progressive_disclosure.llm_client")
     def test_select_multiple_skills(self, mock_llm, tmp_path):
-        skill_dir = tmp_path / "reply"
-        skill_dir.mkdir()
         for name, content in [("sk_a", "Skill A"), ("sk_b", "Skill B")]:
-            (skill_dir / name).mkdir()
-            (skill_dir / name / "SKILL.md").write_text(content)
+            (tmp_path / name).mkdir()
+            (tmp_path / name / "SKILL.md").write_text(content)
 
-        mock_llm.generate.return_value = '["reply/sk_a", "reply/sk_b"]'
+        mock_llm.generate.return_value = '["sk_a", "sk_b"]'
 
         with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
-            result = select_skills("reply", THREAD, "")
+            result = select_skills(THREAD, "")
             assert set(result) == {"Skill A", "Skill B"}
 
     @patch("common.progressive_disclosure.progressive_disclosure.llm_client")
-    def test_does_not_include_watcher_skills_in_reply(self, mock_llm, tmp_path):
-        reply = tmp_path / "reply"
-        reply.mkdir()
-        (reply / "r1").mkdir()
-        (reply / "r1" / "SKILL.md").write_text("Reply skill")
-        watcher = tmp_path / "watcher"
-        watcher.mkdir()
-        (watcher / "w1").mkdir()
-        (watcher / "w1" / "SKILL.md").write_text("Watcher skill")
-
-        mock_llm.generate.return_value = '["reply/r1"]'
-
-        with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
-            result = select_skills("reply", THREAD, "")
-            assert result == ["Reply skill"]
-            prompt = mock_llm.generate.call_args[0][0]
-            assert "watcher/w1" not in prompt
-
-    @patch("common.progressive_disclosure.progressive_disclosure.llm_client")
     def test_no_match_returns_empty(self, mock_llm, tmp_path):
-        skill_dir = tmp_path / "reply"
-        skill_dir.mkdir()
-        (skill_dir / "some_skill").mkdir()
-        (skill_dir / "some_skill" / "SKILL.md").write_text("content")
+        (tmp_path / "some_skill").mkdir()
+        (tmp_path / "some_skill" / "SKILL.md").write_text("content")
 
         mock_llm.generate.return_value = "[]"
 
         with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
-            result = select_skills("reply", THREAD, "")
+            result = select_skills(THREAD, "")
             assert result == []
 
     @patch("common.progressive_disclosure.progressive_disclosure.llm_client")
     def test_empty_skills_dir_no_llm_call(self, mock_llm, tmp_path):
-        skill_dir = tmp_path / "reply"
-        skill_dir.mkdir()
+        tmp_path.mkdir(exist_ok=True)
 
         with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
-            result = select_skills("reply", THREAD, "")
+            result = select_skills(THREAD, "")
             assert result == []
             mock_llm.generate.assert_not_called()
 
     def test_missing_skills_dir_no_error(self, tmp_path):
-        with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
-            result = select_skills("reply", THREAD, "")
+        missing = tmp_path / "no_skills"
+        with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", missing):
+            result = select_skills(THREAD, "")
             assert result == []
 
 

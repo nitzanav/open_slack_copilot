@@ -5,7 +5,7 @@
 ## Requirements
 
 - **Listen to all messages** in configured watch channels via `slack_listener_with_threads.py` (Socket Mode)
-- **Match channel watcher skills** — use progressive disclosure with "channel watcher" skill type; only act when a skill matches
+- **Match watch skills** — use progressive disclosure; only act when a skill matches
 - **Expected to mostly not act** — ~90% of messages won't match any skill; this is normal
 - **Enrich with thread context** — when a skill matches, fetch full thread
 - **Reuse M1 flow** — call `prepare_draft_order` with thread context, matched skills, no user text
@@ -20,7 +20,7 @@
 - `common/slack/slack_bot/slack_listener_with_threads.py` — registers `message` event listener for configured watch channels
 - `common/slack/slack_bot/channel_watcher_handler.py` — M4-specific handler: receives message events, runs progressive disclosure with channel watcher skills, drafts if match
 - `core/slack_bot.py` — `prepare_draft_order` (reused)
-- `common/progressive_disclosure/progressive_disclosure.py` — selects channel watcher skills
+- `common/progressive_disclosure/progressive_disclosure.py` — selects skills (same flat `skills/<name>/` layout)
 - `common/slack/slack_api/slack_api.py` — exposes the slack_bolt client directly, plus helper functions as needed
 - `config/config.py` — list of watched channels
 
@@ -29,13 +29,12 @@
 ```
 ~/.open_slack_copilot/
   skills/
-    channel_watcher/
-      support_escalation/
-        SKILL.md          # freeform: "When a customer reports a P1 bug, draft an escalation..."
-        metadata.json     # { "watcher_user_id": "U123ABC" }
-      unanswered_question/
-        SKILL.md          # freeform: "When a question has been asked 2+ hours ago with no reply..."
-        metadata.json     # { "watcher_user_id": "U456DEF" }
+    support_escalation/
+      SKILL.md          # freeform: "When a customer reports a P1 bug, draft an escalation..."
+      metadata.json     # { "watcher_user_id": "U123ABC" }
+    unanswered_question/
+      SKILL.md          # freeform: "When a question has been asked 2+ hours ago with no reply..."
+      metadata.json     # { "watcher_user_id": "U456DEF" }
 ```
 
 #### `metadata.json` (required per watcher skill)
@@ -70,7 +69,7 @@ slack_listener_with_threads.py ─ message event (channel_id, ts, thread_ts, tex
        ▼
 channel_watcher_handler.py
        │
-       ├── progressive_disclosure.select_skills("channel_watcher", message_text)
+       ├── progressive_disclosure.select_skills(message_text)
        │         │
        │         ├── LLM pass 1: "does any skill apply to this message?"
        │         └── returns matched skills (possibly empty)
@@ -145,7 +144,7 @@ channel_watcher_handler.py
 
 ### STP-4.9: No channel watcher skills exist
 
-- **Precondition**: `skills/channel_watcher/` directory empty or missing.
+- **Precondition**: No watch skills installed (no `SKILL.md` folders under `skills/`).
 - **Input**: `message` event in watched channel.
 - **Expected**: Progressive disclosure skipped. No action taken. No error.
 
@@ -166,7 +165,7 @@ channel_watcher_handler.py
 - **test_skill_match_triggers_draft** — simulate message event, mock progressive disclosure returning a skill, assert `prepare_draft_order` called
 - **test_no_match_does_nothing** — mock progressive disclosure returning empty, assert no `read_thread`, no `send_ephemeral`
 - **test_non_watched_channel_ignored** — message in channel not in config, assert no progressive disclosure call
-- **test_uses_channel_watcher_skills** — assert `select_skills("channel_watcher", ...)` called (not "reply")
+- **test_uses_progressive_disclosure** — assert `select_skills(...)` called on message text
 - **test_thread_only_fetched_after_match** — assert `read_thread` NOT called before progressive disclosure, only after match
 - **test_ephemeral_sent_to_watcher_user** — assert `send_ephemeral` uses `watcher_user_id` from skill's `metadata.json`
 - **test_empty_skills_dir_no_action** — no channel watcher skills, assert no LLM call

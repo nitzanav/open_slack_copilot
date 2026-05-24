@@ -21,7 +21,7 @@ def test_row_key_format():
 
 def test_init_run_writes_row(isolated_data_root):
     key = skill_runs.init_run(
-        skill_id="reply/x",
+        skill_id="x",
         channel_id="C1",
         thread_ts="1.0",
         action_ts="2026-05-10T00:00:00+00:00",
@@ -32,17 +32,17 @@ def test_init_run_writes_row(isolated_data_root):
     )
     row = skill_runs.get(key)
     assert row is not None
-    assert row["skill_id"] == "reply/x"
+    assert row["skill_id"] == "x"
     assert row["tool_name"] == "send_dm_as_app"
     assert row["payload"] == {"target_user_id": "U2"}
     assert skill_runs.get_text(key) == "hello"
     assert skill_runs.get_payload(key) == {"target_user_id": "U2"}
-    assert skill_runs.get_skill_id(key) == "reply/x"
+    assert skill_runs.get_skill_id(key) == "x"
 
 
 def test_enrich_with_run_log_merges(isolated_data_root):
     key = skill_runs.init_run(
-        skill_id="reply/x", channel_id="C", thread_ts="1.0",
+        skill_id="x", channel_id="C", thread_ts="1.0",
         action_ts="2026-05-10T00:00:00+00:00", requester_user_id="U1",
         tool_name="t", payload={}, text="t",
     )
@@ -59,14 +59,14 @@ def test_enrich_with_run_log_missing_row_is_noop(isolated_data_root):
 
 def test_format_as_example_renders_essentials():
     row = {
-        "skill_id": "reply/x",
+        "skill_id": "x",
         "action_ts": "2026-05-10T00:00:00+00:00",
         "payload": {"user_text": "draft a reply"},
         "text": "Hi there.",
         "run_log": {"tool_trace": [{"name": "send_thread_reply_on_behalf_of_requester"}]},
     }
     out = skill_runs.format_as_example(row)
-    assert "reply/x" in out
+    assert "x" in out
     assert "draft a reply" in out
     assert "send_thread_reply_on_behalf_of_requester" in out
     assert "Hi there." in out
@@ -74,7 +74,7 @@ def test_format_as_example_renders_essentials():
 
 def test_init_run_returns_conversation_id_when_passed(isolated_data_root):
     ret = skill_runs.init_run(
-        skill_id="reply/x",
+        skill_id="x",
         channel_id="C1",
         thread_ts="1.0",
         action_ts="2026-05-10T00:00:00+00:00",

@@ -53,7 +53,8 @@ def _handle_copilot(
     context_kind: str = "thread",
     copilot_trigger: str | None = None,
     copilot_action: str | None = None,
-    forced_reply_skill_folder: str | None = None,
+    forced_skill_folder: str | None = None,
+    anchor_message_text: str | None = None,
 ):
     run_react_and_confirm(
         channel_id,
@@ -66,7 +67,8 @@ def _handle_copilot(
         thread_messages=thread_messages,
         copilot_trigger=copilot_trigger,
         copilot_action=copilot_action,
-        forced_reply_skill_folder=forced_reply_skill_folder,
+        forced_skill_folder=forced_skill_folder,
+        anchor_message_text=anchor_message_text,
     )
 
 

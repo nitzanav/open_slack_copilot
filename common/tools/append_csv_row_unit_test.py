@@ -85,3 +85,13 @@ def test_requires_skill_id():
     with react_invocation_context("C1", "T1.0", "Ureq"):
         out = _invoke({"x": "y"})
     assert "error" in out
+
+
+@patch("common.tools.append_csv_row.slack_api")
+def test_rejects_skill_id_with_slash(mock_api, data_root):
+    mock_api.get_channel_prefixed_name.return_value = "#general"
+    with react_invocation_context(
+        "C1", "T1.0", "Ureq", skill_id="reply/foo", action_ts="A1.0",
+    ):
+        out = _invoke({"note": "ok"})
+    assert "error" in out

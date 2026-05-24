@@ -18,7 +18,7 @@ For examples of useful skills, see [`docs/examples/`](docs/examples/).
 
 A development manager posts a message to a user group asking everyone to complete a task (e.g. update on-call rotations, review a document, acknowledge a policy change). Instead of manually chasing people, the manager asks CoPilot to handle follow-ups.
 
-**Follow Up** is a **reply** skill: install it under `~/.open_slack_copilot/skills/reply/follow_up/` (copy from [`skill_examples/reply/follow_up/`](skill_examples/reply/follow_up/SKILL.md)). If you still have it under `skills/watcher/follow_up`, move it to `skills/reply/follow_up` so progressive disclosure can load it. Reply skills are chosen on the same flows as any draft — **`@CoPilot`**, the **Draft with CoPilot** message shortcut (opens a dialog for your instruction, then drafts), and **`/copilot`** in a thread.
+**Follow Up** — install under `~/.open_slack_copilot/skills/follow_up/` (copy from [`skill_examples/follow_up/`](skill_examples/follow_up/SKILL.md)). Skills are chosen on the same flows as any draft — **`@CoPilot`**, the **Draft with CoPilot** message shortcut (opens a dialog for your instruction, then drafts), and **`/copilot`** in a thread.
 
 ### Flow
 
@@ -26,7 +26,7 @@ A development manager posts a message to a user group asking everyone to complet
    > `@backend-team` Please review the RFC and mark ✅ when done.
 2. **In the thread**, the manager writes:
    > `@CoPilot` please follow up
-3. Progressive disclosure can include the **Follow Up** reply skill when it matches the thread and instruction; the model then follows that skill (schedule checks, DMs, etc.).
+3. Progressive disclosure can include the **Follow Up** skill when it matches the thread and instruction; the model then follows that skill (schedule checks, DMs, etc.).
 
 ### What CoPilot does
 
@@ -38,7 +38,7 @@ A development manager posts a message to a user group asking everyone to complet
 
 > **Example DM:** "Hi! Friendly reminder — the backend team was asked to review the RFC. It looks like you haven't confirmed yet. Here's the original thread: _[link]_"
 
-See the full skill definition at [`skill_examples/reply/follow_up/SKILL.md`](skill_examples/reply/follow_up/SKILL.md).
+See the full skill definition at [`skill_examples/follow_up/SKILL.md`](skill_examples/follow_up/SKILL.md).
 
 ---
 
@@ -151,7 +151,7 @@ Paste this when creating the app from a manifest:
 }
 ```
 
-Message shortcuts must use `callback_id` **`slack_copilot_`** + the reply skill folder name (same name as under `~/.open_slack_copilot/skills/reply/`, only `a-z`, `A-Z`, `_`, `-`). The app registers one Bolt listener for that pattern; shortcuts without the prefix or without a matching `SKILL.md` are ignored silently. See [Add a skill as a message shortcut](#add-a-skill-as-message-shortcut).
+Message shortcuts must use `callback_id` **`slack_copilot_`** + the skill folder name (same name as under `~/.open_slack_copilot/skills/`, only `a-z`, `A-Z`, `_`, `-`). The app registers one Bolt listener for that pattern; shortcuts without the prefix or without a matching `SKILL.md` are ignored silently. See [Add a skill as a message shortcut](#add-a-skill-as-message-shortcut).
 
 ### 2. Get Your Credentials
 
@@ -239,21 +239,20 @@ Skills are freeform markdown instructions that guide the bot's reply behavior. T
 ```
 ~/.open_slack_copilot/
   skills/
-    reply/
-      default.md            # optional — overrides the built-in default instruction
-      <skill_name>/
-        SKILL.md
+    default.md            # optional — overrides the built-in default instruction
+    <skill_name>/
+      SKILL.md
 ```
 
-- **Default skill** — To override the built-in default reply instruction, create `~/.open_slack_copilot/skills/reply/default.md` with your own markdown. When no skill matches a thread, this file is used instead of the [bundled default](common/progressive_disclosure/default_reply_instruction.md).
-- **Additional skills** — Add folders under `~/.open_slack_copilot/skills/reply/`. Each folder contains a `SKILL.md` file. The bot uses progressive disclosure to automatically select relevant skills per thread (including on **`@CoPilot`** and **`/copilot`**).
+- **Default skill** — To override the built-in default instruction, create `~/.open_slack_copilot/skills/default.md` with your own markdown. When no skill matches a thread, this file is used instead of the [bundled default](common/progressive_disclosure/default_instruction.md).
+- **Additional skills** — Add folders under `~/.open_slack_copilot/skills/`. Each folder contains a `SKILL.md` file. The bot uses progressive disclosure to automatically select relevant skills per thread (including on **`@CoPilot`** and **`/copilot`**).
 
-For examples of useful skills, see [`docs/examples/`](docs/examples/) and the **Follow Up** reply skill at [`skill_examples/reply/follow_up/SKILL.md`](skill_examples/reply/follow_up/SKILL.md).
+For examples of useful skills, see [`docs/examples/`](docs/examples/) and the **Follow Up** skill at [`skill_examples/follow_up/SKILL.md`](skill_examples/follow_up/SKILL.md).
 
 ### Add a skill as a message shortcut
 
-1. Create `~/.open_slack_copilot/skills/reply/<skill_directory>/SKILL.md` (see [`skill_examples/reply/follow_up/SKILL.md`](skill_examples/reply/follow_up/SKILL.md)).
-2. [api.slack.com/apps](https://api.slack.com/apps) → your app → **Features** → **Shortcuts** → **Create New Shortcut** → **On messages**. **Callback ID** must match `slack_copilot_<skill_directory>` (e.g. `slack_copilot_follow_up` for `reply/follow_up/`). Reinstall the app.
+1. Create `~/.open_slack_copilot/skills/<skill_directory>/SKILL.md` (see [`skill_examples/follow_up/SKILL.md`](skill_examples/follow_up/SKILL.md)).
+2. [api.slack.com/apps](https://api.slack.com/apps) → your app → **Features** → **Shortcuts** → **Create New Shortcut** → **On messages**. **Callback ID** must match `slack_copilot_<skill_directory>` (e.g. `slack_copilot_follow_up` for `follow_up/`). Reinstall the app.
 3. On a message: **⋯** → your shortcut → **Submit**.
 
 ---

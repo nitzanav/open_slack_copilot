@@ -37,7 +37,9 @@ def main() -> None:
         _start_oauth_server_thread()
     else:
         print(  # noqa: T201 — CLI entry
-            "[run] Skipping user OAuth server: SLACK_CLIENT_ID / SLACK_CLIENT_SECRET not set."
+            "[run] User OAuth server not started (SLACK_CLIENT_ID / SLACK_CLIENT_SECRET not set). "
+            "That's fine for most setups — configure these only if you need the bot to send "
+            "messages on behalf of people across your organization via OAuth."
         )
     slack_bot.start()
 

@@ -108,36 +108,36 @@ def resolve_copilot_slack_context(
     return thread_ts, fetch_thread_messages(channel_id, thread_ts)
 
 
-# Slack message shortcuts: ``callback_id`` is ``slack_copilot_<reply_skill_folder>`` (see README).
+# Slack message shortcuts: ``callback_id`` is ``slack_copilot_<skill_folder>`` (see README).
 MESSAGE_SHORTCUT_CALLBACK_PREFIX = "slack_copilot_"
 MESSAGE_SHORTCUT_CALLBACK_PATTERN = re.compile(
     r"^slack_copilot_[a-zA-Z_-]+\Z",
 )
 
 
-class ForcedReplySkillMissing(Exception):
-    """Forced reply skill folder has no ``SKILL.md`` (or was removed after the modal opened)."""
+class ForcedSkillMissing(Exception):
+    """Forced skill folder has no ``SKILL.md`` (or was removed after the modal opened)."""
 
 
-def load_forced_reply_skill(skill_folder: str) -> tuple[str, str] | None:
-    """Load ``reply/<skill_folder>/SKILL.md`` (same rules as progressive disclosure)."""
-    return progressive_disclosure.load_forced_reply_skill(skill_folder)
+def load_forced_skill(skill_folder: str) -> tuple[str, str] | None:
+    """Load ``<skill_folder>/SKILL.md`` (same rules as progressive disclosure)."""
+    return progressive_disclosure.load_forced_skill(skill_folder)
 
 
-def _reply_skill_folder_installed(folder: str) -> bool:
-    """True when ``reply/<folder>/SKILL.md`` exists (no file read)."""
+def _skill_folder_installed(folder: str) -> bool:
+    """True when ``<folder>/SKILL.md`` exists (no file read)."""
     f = (folder or "").strip()
-    if not progressive_disclosure.is_safe_reply_skill_folder_name(f):
+    if not progressive_disclosure.is_safe_skill_folder_name(f):
         return False
-    d = progressive_disclosure.SKILLS_ROOT / "reply" / f
+    d = progressive_disclosure.SKILLS_ROOT / f
     return d.is_dir() and (d / "SKILL.md").is_file()
 
 
 def parse_copilot_shortcut_callback_id(callback_id: str) -> str | None:
     """Suffix of a ``slack_copilot_<folder>`` callback_id, or None when not a copilot shortcut.
 
-    Does NOT check whether the named reply skill is installed on disk; callers use
-    :func:`reply_skill_folder_valid_for_forced_modal` to distinguish "missing SKILL.md"
+    Does NOT check whether the named skill is installed on disk; callers use
+    :func:`skill_folder_valid_for_forced_modal` to distinguish "missing SKILL.md"
     from "not a copilot shortcut" and surface the right error to the user.
     """
     cid = (callback_id or "").strip()
@@ -146,9 +146,9 @@ def parse_copilot_shortcut_callback_id(callback_id: str) -> str | None:
     return cid.removeprefix(MESSAGE_SHORTCUT_CALLBACK_PREFIX)
 
 
-def reply_skill_folder_valid_for_forced_modal(folder: str) -> bool:
-    """True when ``folder`` is safe and ``reply/<folder>/SKILL.md`` exists (modal submit guard)."""
-    return _reply_skill_folder_installed(folder)
+def skill_folder_valid_for_forced_modal(folder: str) -> bool:
+    """True when ``folder`` is safe and ``<folder>/SKILL.md`` exists (modal submit guard)."""
+    return _skill_folder_installed(folder)
 
 
 def run_react_loop(
@@ -167,23 +167,29 @@ def run_react_loop(
     context_kind: str = "thread",
     skill_id: str | None = None,
     action_ts: str | None = None,
-    forced_reply_skill_folder: str | None = None,
+    forced_skill_folder: str | None = None,
+    anchor_message_text: str | None = None,
     on_agent_event: AgentEventNotifier | None = None,
 ) -> ReactLoopResult:
     if thread_messages is None:
         thread_messages = fetch_thread_messages(channel_id, thread_ts)
-    if forced_reply_skill_folder is not None:
-        selected = load_forced_reply_skill(forced_reply_skill_folder)
+    if forced_skill_folder is not None:
+        selected = load_forced_skill(forced_skill_folder)
         if selected is None:
-            raise ForcedReplySkillMissing
+            raise ForcedSkillMissing
         skill_id, forced_text = selected
         skills = [forced_text]
     else:
         skills = select_skills(thread_messages, user_text)
-    thread_text = _thread_messages_text(thread_messages)
-    rag_results = fetch_rag_context(channel_id, thread_ts, user_id, thread_messages)
+    rag_query_text = build_rag_query_text(
+        anchor_message_text=anchor_message_text,
+        user_text=user_text,
+        thread_messages=thread_messages,
+        context_kind=context_kind,
+    )
+    rag_results = fetch_rag_context(channel_id, thread_ts, user_id, rag_query_text)
     cross_rag_results = fetch_cross_channel_rag(
-        channel_id, thread_ts, user_id, thread_text
+        channel_id, thread_ts, user_id, rag_query_text
     )
     examples = load_examples()
     agent_log_section = ""
@@ -387,7 +393,7 @@ def _format_thread_for_prompt(
 # ---------------------------------------------------------------------------
 
 def select_skills(thread_messages: list[dict], user_text: str) -> list[str]:
-    skills = progressive_disclosure.select_skills("reply", thread_messages, user_text)
+    skills = progressive_disclosure.select_skills(thread_messages, user_text)
     if not skills:
         return [progressive_disclosure.get_default_instruction()]
     return skills
@@ -397,8 +403,10 @@ def fetch_rag_context(
     channel_id: str,
     thread_ts: str,
     user_id: str,
-    thread_messages: list[dict],
+    rag_query_text: str,
 ) -> list[dict]:
+    if not (rag_query_text or "").strip():
+        return []
     try:
         if not slack_rag.is_ready(channel_id):
             copilot_user_notify.notify_progress(
@@ -406,7 +414,7 @@ def fetch_rag_context(
                 "Preparing RAG for this channel, will update when done.",
             )
             slack_rag.build(channel_id, get_checkpoint_seconds())
-        return slack_rag.query_channel(channel_id, _thread_messages_text(thread_messages))
+        return slack_rag.query_channel(channel_id, rag_query_text)
     except Exception:
         return []
 
@@ -415,8 +423,10 @@ def fetch_cross_channel_rag(
     channel_id: str,
     thread_ts: str,
     user_id: str,
-    thread_context: str,
+    rag_query_text: str,
 ) -> list[dict]:
+    if not (rag_query_text or "").strip():
+        return []
     cross_channels = get_cross_channel_ids()
     if not cross_channels:
         return []
@@ -432,7 +442,7 @@ def fetch_cross_channel_rag(
             for ch in missing:
                 slack_rag.build(ch, checkpoint)
         return slack_rag.query_cross_channel(
-            cross_channels, thread_context, exclude_channel=channel_id
+            cross_channels, rag_query_text, exclude_channel=channel_id
         )
     except Exception:
         return []
@@ -454,6 +464,28 @@ def get_cross_channel_ids() -> list[str]:
 
 def _thread_messages_text(thread_messages: list[dict]) -> str:
     return " ".join(m.get("text", "") for m in thread_messages)
+
+
+def build_rag_query_text(
+    *,
+    anchor_message_text: str | None,
+    user_text: str,
+    thread_messages: list[dict],
+    context_kind: str,
+) -> str:
+    """Focus-weighted RAG query: anchor (x3), instruction (x2), thread background (x1)."""
+    parts: list[str] = []
+    anchor = (anchor_message_text or "").strip()
+    instruction = (user_text or "").strip()
+    if anchor:
+        parts.extend([anchor] * 3)
+    if instruction and instruction != anchor:
+        parts.extend([instruction] * 2)
+    if context_kind == "thread":
+        background = _thread_messages_text(thread_messages).strip()
+        if background:
+            parts.append(background)
+    return " ".join(parts).strip()
 
 
 def _collapse_blank_lines(text: str) -> str:

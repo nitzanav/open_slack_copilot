@@ -200,7 +200,6 @@ def build_follow_up_e2e_context(
     skill_text = (
         Path(__file__).resolve().parents[2]
         / "skill_examples"
-        / "reply"
         / "follow_up"
         / "SKILL.md"
     ).read_text()

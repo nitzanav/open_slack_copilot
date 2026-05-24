@@ -56,6 +56,8 @@ def _csv_path(injected: dict[str, str]) -> Path:
     skill_id = injected.get("skill_id") or ""
     if not skill_id:
         raise _MissingSkillId("Missing skill_id in invocation context")
+    if "/" in skill_id or skill_id in (".", ".."):
+        raise _MissingSkillId("Invalid skill_id in invocation context")
     root = Path(str(settings.get("data_layer", {}).get("root", "~/.open_slack_copilot"))).expanduser()
     return root / "data" / f"{skill_id}.csv"
 

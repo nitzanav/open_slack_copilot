@@ -1,6 +1,6 @@
 # Follow Up
 
-**Reply skill** — Install under `~/.open_slack_copilot/skills/reply/follow_up/` (copy from the repo’s `skill_examples/reply/follow_up/`). The bot loads **reply** skills via progressive disclosure on every draft: **`@CoPilot`**, the **Draft with CoPilot** message shortcut, and **`/copilot`** in a thread (same `prepare_draft` path). This skill applies when the thread and instruction match (e.g. “please follow up”).
+Install under `~/.open_slack_copilot/skills/follow_up/` (copy from the repo’s `skill_examples/follow_up/`). The bot loads skills via progressive disclosure on every draft: **`@CoPilot`**, the **Draft with CoPilot** message shortcut, and **`/copilot`** in a thread. This skill applies when the thread and instruction match (e.g. “please follow up”).
 
 When asked to follow up with users on an action item from a Slack thread.
 

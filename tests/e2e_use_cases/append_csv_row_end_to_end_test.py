@@ -24,7 +24,7 @@ from tests.e2e_use_cases.llm_fake_backend import FakeCompletionBackend, assert_l
 C_TEST = "C0ALHSXRDU5"
 U_USER1 = "U0AMFJ2AVME"
 TS_ROOT = "1779450059.378599"
-SKILL_ID = "reply/general_instruction"
+SKILL_ID = "general_instruction"
 ACTION_TS = "2026-05-22T10:00:00+00:00"
 
 _e2e_log = get_test_logger("e2e")
@@ -79,7 +79,6 @@ def build_append_csv_row_e2e_context(
     skill_text = (
         Path(__file__).resolve().parents[2]
         / "skill_examples"
-        / "reply"
         / "general_instruction"
         / "SKILL.md"
     ).read_text()

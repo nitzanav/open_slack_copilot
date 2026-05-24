@@ -120,6 +120,7 @@ class TestSlashCommandEndToEnd:
             context_kind="thread",
             copilot_trigger="slash_command",
             copilot_action="send_thread_reply_on_behalf_of_requester",
+            anchor_message_text="",
         )
 
     def test_callback_registration(self):

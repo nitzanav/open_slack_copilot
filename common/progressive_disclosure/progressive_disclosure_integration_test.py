@@ -17,16 +17,14 @@ THREAD = [
 class TestEndToEndSkillSelection:
     @patch("common.progressive_disclosure.progressive_disclosure.llm_client")
     def test_real_skills_dir_returns_content(self, mock_llm, tmp_path):
-        skill_dir = tmp_path / "reply"
-        skill_dir.mkdir()
-        (skill_dir / "polite_reply").mkdir()
-        (skill_dir / "polite_reply" / "SKILL.md").write_text("Be warm and professional.")
+        (tmp_path / "polite_reply").mkdir()
+        (tmp_path / "polite_reply" / "SKILL.md").write_text("Be warm and professional.")
 
-        mock_llm.generate.return_value = '["reply/polite_reply"]'
+        mock_llm.generate.return_value = '["polite_reply"]'
 
         with patch("common.progressive_disclosure.progressive_disclosure.SKILLS_ROOT", tmp_path):
             from common.progressive_disclosure.progressive_disclosure import select_skills
-            result = select_skills("reply", THREAD, "")
+            result = select_skills(THREAD, "")
             assert result == ["Be warm and professional."]
 
     @patch("common.slack.copilot_pipeline.fetch_thread_messages")
@@ -34,12 +32,10 @@ class TestEndToEndSkillSelection:
     @patch("common.slack.copilot_pipeline.llm_client")
     @patch("common.progressive_disclosure.progressive_disclosure.llm_client")
     def test_slash_command_with_skills(self, mock_pd_llm, mock_bot_llm, mock_rag, mock_fetch, tmp_path):
-        skill_dir = tmp_path / "reply"
-        skill_dir.mkdir()
-        (skill_dir / "code_review").mkdir()
-        (skill_dir / "code_review" / "SKILL.md").write_text("Review code carefully.")
+        (tmp_path / "code_review").mkdir()
+        (tmp_path / "code_review" / "SKILL.md").write_text("Review code carefully.")
 
-        mock_pd_llm.generate.return_value = '["reply/code_review"]'
+        mock_pd_llm.generate.return_value = '["code_review"]'
         mock_bot_llm.agent_tool_loop.return_value = AgentToolLoopResult("Draft with code review skill", [])
         mock_rag.is_ready.return_value = True
         mock_rag.query_channel.return_value = []

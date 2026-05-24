@@ -1,4 +1,14 @@
 - [TO TEST] oauth
+- add filter to skills 
+  - time since last message greater than
+  - time since last skill execution on this thread
+- 
+- summary: 
+  - [test] skill
+  - 
+  - auto trigger
+  - classification
+  - thumbs up to add a rule.
 - thumbs up - files system is not a good place - RAG is the right one, because you want to take the best one
 - structure of skills and rules. skill has rules, rule is linked to many conversation actions (channel_id, thread_ts, conversation_id, action_ts)
   - when you click on thumbs up, it will not need only to add the conversation as example. A conversation is not a rule, iti s not clear enough and has lot's of noice.
@@ -42,7 +52,6 @@ Future
 - coding - chat indications
 - In tool confirmation, add : powered by "open slack bot" with a link to github
 - CI/CD
-- ??? change M4 for watcher skills metabase.json to define who is the watcher user id. Not related to owner hcange it as wellpm
 - track my follow ups, create task list for users with slack threads
 
 CANCELLED

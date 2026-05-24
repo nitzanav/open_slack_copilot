@@ -1,6 +1,6 @@
 # Example Skills
 
-Copy any of these into `~/.open_slack_copilot/skills/reply/<skill_name>/SKILL.md` to use them.
+Copy any of these into `~/.open_slack_copilot/skills/<skill_name>/SKILL.md` to use them.
 
 | Skill | Description |
 |---|---|
@@ -11,4 +11,4 @@ Copy any of these into `~/.open_slack_copilot/skills/reply/<skill_name>/SKILL.md
 
 ### Default skill override
 
-To override the built-in default instruction, copy [default.md](default.md) to `~/.open_slack_copilot/skills/reply/default.md` and edit to taste.
+To override the built-in default instruction, copy [default.md](default.md) to `~/.open_slack_copilot/skills/default.md` and edit to taste.

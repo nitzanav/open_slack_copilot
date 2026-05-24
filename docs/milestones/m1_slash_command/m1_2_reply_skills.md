@@ -1,5 +1,7 @@
 # M1.2 — Reply Skills (Progressive Disclosure)
 
+> **Historical:** The `reply/` / `watcher/` kind layer was removed. Skills now live at `~/.open_slack_copilot/skills/<name>/SKILL.md`. See [`common/progressive_disclosure/progressive_disclosure.py`](../../../common/progressive_disclosure/progressive_disclosure.py).
+
 [← Back to PRD](../../PRD.md)
 
 ## Requirements

@@ -211,7 +211,6 @@ def build_summarize_revise_e2e_context(
     skill_text = (
         Path(__file__).resolve().parents[2]
         / "skill_examples"
-        / "reply"
         / "general_instruction"
         / "SKILL.md"
     ).read_text()

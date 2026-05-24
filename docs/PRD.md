@@ -16,8 +16,8 @@
 
 - **Draft replies** — via message shortcut, @mention, or `/copilot` slash command
   - Uses RAG of the relevant channel + cross-channel RAG
-  - Using list of predefined **reply** skills selected via progressive disclosure (same pipeline for shortcut, @mention, and slash command)
-  - **Follow-ups on action items** — example **reply** skill [`skill_examples/reply/follow_up/SKILL.md`](../skill_examples/reply/follow_up/SKILL.md) (install under `~/.open_slack_copilot/skills/reply/follow_up/`); uses `schedule_prompt`, `list_usergroup_members`, `send_dm_as_app`, and **`send_thread_reply_on_behalf_of_requester`** for the visible thread reply. Capability map: [M15](milestones/m15_follow_ups_use_case/m15_follow_ups_use_case.md)
+  - Using predefined skills selected via progressive disclosure (same pipeline for shortcut, @mention, and slash command)
+  - **Follow-ups on action items** — example skill [`skill_examples/follow_up/SKILL.md`](../skill_examples/follow_up/SKILL.md) (install under `~/.open_slack_copilot/skills/follow_up/`); uses `schedule_prompt`, `list_usergroup_members`, `send_dm_as_app`, and **`send_thread_reply_on_behalf_of_requester`** for the visible thread reply. Capability map: [M15](milestones/m15_follow_ups_use_case/m15_follow_ups_use_case.md)
 - **Draft Revise** — for pending thread replies and other confirmed tools: **Revise** opens a modal; submit re-runs the ReAct path with the same Slack context (`context_kind`, thread vs channel tail) via [`tool_confirmation.py`](../common/slack/slack_bot/tool_confirmation.py)
 - **Send DM** — LLM can invoke `send_dm_as_app` tool; the requesting user confirms via ephemeral Block Kit (**Revise** + **Confirm**) in the same module as other tools
 - **Scheduled prompts** — LLM can invoke `schedule_prompt` tool to register a cron job that re-runs a prompt on a thread (e.g. follow-up reminders); see [M15](milestones/m15_follow_ups_use_case/m15_follow_ups_use_case.md) for tooling details and remaining gaps (e.g. external status checks)
@@ -41,11 +41,10 @@
 
 ## Skills/Tools
 
-- **Saved Skills** — define reusable behaviors in `~/.open_slack_copilot/skills/`
-  - Two kinds defined in code (`progressive_disclosure.py`):
-    - **"reply" skills** — selected via progressive disclosure when drafting a reply (**implemented**); used for `/copilot`, message shortcut, and **`@CoPilot`** app mention. Example: [Follow Up](../skill_examples/reply/follow_up/SKILL.md) (`skills/reply/follow_up/`)
-    - **"watcher" skills** — intended for passive channel watching (M4); kind exists in code but is **not wired** into the pipeline yet — distinct from **reply** skills such as Follow Up
-  - Default reply instruction can be overridden via `~/.open_slack_copilot/skills/reply/default.md`
+- **Saved Skills** — define reusable behaviors in `~/.open_slack_copilot/skills/<name>/SKILL.md`
+  - Selected via progressive disclosure when drafting (**implemented**); used for `/copilot`, message shortcut, and **`@CoPilot`** app mention. Example: [Follow Up](../skill_examples/follow_up/SKILL.md) (`skills/follow_up/`)
+  - Default instruction can be overridden via `~/.open_slack_copilot/skills/default.md`
+  - Channel watch (M4) will use the same flat layout with per-skill `metadata.json`; not wired yet
 - **Channel RAG** — build and use retrieval from channel data
   - Build RAG of a specific channel (messages indexed with reaction summaries)
   - Auto-checks if live RAG already exists & its status (`is_ready`, `build_if_missing`)
@@ -88,11 +87,11 @@
 
 ### Not Implemented
 
-- [**M15: Follow-ups use case**](milestones/m15_follow_ups_use_case/m15_follow_ups_use_case.md) — document and track implementation of the [Follow Up **reply** skill example](../skill_examples/reply/follow_up/SKILL.md): infer cadence, resolve targets, completion checks, `schedule_prompt`, scheduled re-runs, DMs; maps each capability to code or **to be done**
+- [**M15: Follow-ups use case**](milestones/m15_follow_ups_use_case/m15_follow_ups_use_case.md) — document and track implementation of the [Follow Up skill example](../skill_examples/follow_up/SKILL.md): infer cadence, resolve targets, completion checks, `schedule_prompt`, scheduled re-runs, DMs; maps each capability to code or **to be done**
 - [**M2: Auto-draft replies to mentions**](milestones/m2_auto_draft_mentions/m2_auto_draft_mentions.md) — listen for messages where the user is @mentioned, use reply skills (progressive disclosure) to draft a reply automatically. Send ephemeral with suggested draft. Requires a `message` event listener (not yet wired).
   - reuses M1 flow with reply skills
   - use case — user wants to draft answers for all their mentions
-- [**M4: Watch channels and match skills**](milestones/m4_watch_channels_match_skills/m4_watch_channels_match_skills.md) — listen to all messages in configured watch channels, match "channel watcher skills" via progressive disclosure. Only acts when a skill matches (expected ~10% of messages). Requires a `message` event listener and wiring watcher skills into the pipeline (not yet implemented).
+- [**M4: Watch channels and match skills**](milestones/m4_watch_channels_match_skills/m4_watch_channels_match_skills.md) — listen to all messages in configured watch channels, match skills via progressive disclosure. Only acts when a skill matches (expected ~10% of messages). Requires a `message` event listener (not yet implemented).
 - [**M5: Tool - mention people**](milestones/m5_mention_people/m5_mention_people.md) — it might not need something special
 
 

@@ -29,7 +29,6 @@ TS_MSG = "1779450071.334449"
 FOLLOW_UP_SKILL_TEXT = (
     Path(__file__).resolve().parents[2]
     / "skill_examples"
-    / "reply"
     / "follow_up"
     / "SKILL.md"
 ).read_text()
@@ -125,7 +124,7 @@ def build_shortcut_modal_e2e_context(
     mock_pd = MagicMock()
     mock_pd.select_skills.return_value = []
     mock_pd.get_default_instruction.return_value = ""
-    mock_pd.load_forced_reply_skill.return_value = ("reply/follow_up", FOLLOW_UP_SKILL_TEXT)
+    mock_pd.load_forced_skill.return_value = ("follow_up", FOLLOW_UP_SKILL_TEXT)
 
     mock_rag = MagicMock()
     mock_rag.is_ready.return_value = True
@@ -246,13 +245,13 @@ class TestShortcutModalEndToEnd:
         ctx = build_shortcut_modal_e2e_context(tmp_path, monkeypatch)
         with patched_shortcut_modal_e2e(ctx):
             with patch(
-                "common.slack.copilot_pipeline.load_forced_reply_skill",
-                side_effect=lambda folder: ("reply/follow_up", FOLLOW_UP_SKILL_TEXT),
+                "common.slack.copilot_pipeline.load_forced_skill",
+                side_effect=lambda folder: ("follow_up", FOLLOW_UP_SKILL_TEXT),
             ) as mock_load_forced:
                 with patch(
                     "common.slack.slack_bot.slack_listener_with_threads"
-                    ".load_forced_reply_skill",
-                    side_effect=lambda folder: ("reply/follow_up", FOLLOW_UP_SKILL_TEXT),
+                    ".load_forced_skill",
+                    side_effect=lambda folder: ("follow_up", FOLLOW_UP_SKILL_TEXT),
                 ):
                     trigger_follow_up_shortcut_and_submit(ctx, mock_load_forced)
             assert_forced_skill_in_prompt(ctx)

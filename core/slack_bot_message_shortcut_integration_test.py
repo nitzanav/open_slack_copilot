@@ -38,8 +38,8 @@ THREAD_3 = _load_fixture("fixture_thread_3_messages.json")
 def _mock_bot_deps(mock_llm, mock_pd, mock_rag):
     mock_pd.select_skills.return_value = []
     mock_pd.get_default_instruction.return_value = "default"
-    mock_pd.load_forced_reply_skill.return_value = (
-        "reply/draft_with_copilot",
+    mock_pd.load_forced_skill.return_value = (
+        "draft_with_copilot",
         "forced skill body",
     )
     mock_rag.is_ready.return_value = True
@@ -139,6 +139,8 @@ class TestMessageShortcutEndToEnd:
         shortcut = _shortcut_payload(channel_id="C1", user_id="U1")
         shortcut_fn(ack=MagicMock(), shortcut=shortcut, client=client)
         metadata = client.views_open.call_args[1]["view"]["private_metadata"]
+        meta = json.loads(metadata)
+        assert meta.get("anchor_message_text") == "Sample message"
 
         body = {
             "view": {
@@ -161,6 +163,10 @@ class TestMessageShortcutEndToEnd:
         prompt = mock_llm.agent_tool_loop.call_args[0][0]
         for msg in THREAD_3:
             assert msg["text"] in prompt
+
+        rag_query = mock_rag.query_channel.call_args[0][1]
+        assert rag_query.count("Sample message") == 3
+        assert rag_query.count("Draft reply on my behalf for this thread") == 2
 
         mock_react_notify.notify_error.assert_not_called()
         mock_react_notify.notify_react_feedback.assert_not_called()

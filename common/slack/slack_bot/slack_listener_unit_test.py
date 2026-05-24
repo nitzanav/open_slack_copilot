@@ -70,6 +70,7 @@ class TestRegisterCopilotCommand:
             user_text="help me", channel_name=None, context_kind="thread",
             copilot_trigger="slash_command",
             copilot_action="send_thread_reply_on_behalf_of_requester",
+            anchor_message_text="help me",
         )
 
     @patch("common.slack.slack_bot.slack_listener_with_threads.copilot_user_notify")
@@ -98,10 +99,10 @@ class TestRegisterCopilotShortcut:
 
     @patch(
         "common.slack.slack_bot.slack_listener_with_threads"
-        ".reply_skill_folder_valid_for_forced_modal",
+        ".skill_folder_valid_for_forced_modal",
         return_value=True,
     )
-    @patch("common.slack.slack_bot.slack_listener_with_threads.load_forced_reply_skill")
+    @patch("common.slack.slack_bot.slack_listener_with_threads.load_forced_skill")
     @patch(
         "common.slack.slack_bot.slack_listener_with_threads"
         ".parse_copilot_shortcut_callback_id",
@@ -114,7 +115,7 @@ class TestRegisterCopilotShortcut:
         _mock_valid,
     ):
         mock_load_skill.return_value = (
-            "reply/draft_with_copilot",
+            "draft_with_copilot",
             "# Draft thread reply\n\nBody.",
         )
         app = MagicMock()
@@ -151,7 +152,7 @@ class TestRegisterCopilotShortcut:
         mock_load_skill.assert_called()
         meta = json.loads(view["private_metadata"])
         assert meta == {
-            "reply_skill_folder": "draft_with_copilot",
+            "skill_folder": "draft_with_copilot",
             "channel_id": "C1",
             "message_ts": "1516229207.000133",
             "thread_ts": "1516229200.000000",
@@ -161,10 +162,10 @@ class TestRegisterCopilotShortcut:
 
     @patch(
         "common.slack.slack_bot.slack_listener_with_threads"
-        ".reply_skill_folder_valid_for_forced_modal",
+        ".skill_folder_valid_for_forced_modal",
         return_value=True,
     )
-    @patch("common.slack.slack_bot.slack_listener_with_threads.load_forced_reply_skill")
+    @patch("common.slack.slack_bot.slack_listener_with_threads.load_forced_skill")
     @patch(
         "common.slack.slack_bot.slack_listener_with_threads"
         ".parse_copilot_shortcut_callback_id",
@@ -176,7 +177,7 @@ class TestRegisterCopilotShortcut:
         self, mock_slack_api, mock_resolve, _mock_folder, mock_load_skill,
         _mock_valid,
     ):
-        mock_load_skill.return_value = ("reply/draft_with_copilot", "# Draft\n")
+        mock_load_skill.return_value = ("draft_with_copilot", "# Draft\n")
         app = MagicMock()
         handler = MagicMock()
         msgs = [{"user": "U2", "text": "root msg"}]
@@ -201,7 +202,7 @@ class TestRegisterCopilotShortcut:
             client.views_open.call_args[1]["view"]["private_metadata"],
         )
         assert meta == {
-            "reply_skill_folder": "draft_with_copilot",
+            "skill_folder": "draft_with_copilot",
             "channel_id": "C2",
             "message_ts": "1516229207.000133",
             "user_id": "U1",
@@ -210,7 +211,7 @@ class TestRegisterCopilotShortcut:
 
     @patch(
         "common.slack.slack_bot.slack_listener_with_threads"
-        ".reply_skill_folder_valid_for_forced_modal",
+        ".skill_folder_valid_for_forced_modal",
         return_value=True,
     )
     @patch(
@@ -244,7 +245,7 @@ class TestRegisterCopilotShortcut:
 
     @patch(
         "common.slack.slack_bot.slack_listener_with_threads"
-        ".reply_skill_folder_valid_for_forced_modal",
+        ".skill_folder_valid_for_forced_modal",
         return_value=False,
     )
     @patch(
@@ -284,7 +285,7 @@ class TestRegisterCopilotShortcut:
         assert "summarize_thread" in args[3]
         assert "SKILL.md" in args[3] or "install_skill_examples" in args[3]
 
-    @patch("common.slack.slack_bot.slack_listener_with_threads.reply_skill_folder_valid_for_forced_modal")
+    @patch("common.slack.slack_bot.slack_listener_with_threads.skill_folder_valid_for_forced_modal")
     @patch("common.slack.slack_bot.slack_listener_with_threads.resolve_copilot_slack_context")
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
     def test_shortcut_modal_submit_calls_handler(
@@ -302,7 +303,7 @@ class TestRegisterCopilotShortcut:
         body = {
             "view": {
                 "private_metadata": json.dumps({
-                    "reply_skill_folder": "draft_with_copilot",
+                    "skill_folder": "draft_with_copilot",
                     "channel_id": "C1",
                     "message_ts": "1516229207.000133",
                     "thread_ts": "1516229200.000000",
@@ -338,7 +339,8 @@ class TestRegisterCopilotShortcut:
             context_kind="thread",
             copilot_trigger="message_shortcut",
             copilot_action="send_thread_reply_on_behalf_of_requester",
-            forced_reply_skill_folder="draft_with_copilot",
+            forced_skill_folder="draft_with_copilot",
+            anchor_message_text=None,
         )
 
     @patch("common.slack.slack_bot.slack_listener_with_threads.resolve_copilot_slack_context")
@@ -359,15 +361,15 @@ class TestRegisterCopilotShortcut:
         handler.assert_not_called()
         mock_resolve.assert_not_called()
 
-    @patch("common.slack.slack_bot.slack_listener_with_threads.load_forced_reply_skill")
-    @patch("common.slack.slack_bot.slack_listener_with_threads.reply_skill_folder_valid_for_forced_modal")
+    @patch("common.slack.slack_bot.slack_listener_with_threads.load_forced_skill")
+    @patch("common.slack.slack_bot.slack_listener_with_threads.skill_folder_valid_for_forced_modal")
     @patch("common.slack.slack_bot.slack_listener_with_threads.resolve_copilot_slack_context")
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")
     def test_shortcut_modal_submit_empty_instruction_uses_default(
         self, mock_slack_api, mock_resolve, mock_valid_folder, mock_load_skill,
     ):
         mock_valid_folder.return_value = True
-        mock_load_skill.return_value = ("reply/draft_with_copilot", "# Draft thread reply\n")
+        mock_load_skill.return_value = ("draft_with_copilot", "# Draft thread reply\n")
         app = MagicMock()
         handler = MagicMock()
         mock_resolve.return_value = ("T1", [])
@@ -378,7 +380,7 @@ class TestRegisterCopilotShortcut:
         body = {
             "view": {
                 "private_metadata": json.dumps({
-                    "reply_skill_folder": "draft_with_copilot",
+                    "skill_folder": "draft_with_copilot",
                     "channel_id": "C1",
                     "message_ts": "1.0",
                     "user_id": "U1",
@@ -442,6 +444,7 @@ class TestRegisterCopilotAppMention:
             context_kind="channel_tail",
             copilot_trigger="app_mention",
             copilot_action="send_thread_reply_on_behalf_of_requester",
+            anchor_message_text="make it brief",
         )
 
     @patch("common.slack.slack_bot.slack_listener_with_threads.resolve_copilot_slack_context")
@@ -533,6 +536,7 @@ class TestRegisterCopilotAppMention:
             context_kind="thread",
             copilot_trigger="app_mention",
             copilot_action="send_thread_reply_on_behalf_of_requester",
+            anchor_message_text="",
         )
 
     @patch("common.slack.slack_bot.slack_listener_with_threads.slack_api")

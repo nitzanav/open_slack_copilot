@@ -1,10 +1,10 @@
 # General Instruction
 
-**Reply skill** — Install under `~/.open_slack_copilot/skills/reply/general_instruction/` (copy from the repo’s `skill_examples/reply/general_instruction/`). Loaded with other **reply** skills on **`@CoPilot`**, **Draft with CoPilot**, and **`/copilot`** runs.
+Install under `~/.open_slack_copilot/skills/general_instruction/` (copy from the repo’s `skill_examples/general_instruction/`). Loaded with other skills on **`@CoPilot`**, **Draft with CoPilot**, and **`/copilot`** runs.
 
 ## When this applies
 
-Use this skill when **no other installed reply skill is clearly more specific**, and the user’s message is an **action request** or imperative—not only thread drafting or tone/style tweaks.
+Use this skill when **no other installed skill is clearly more specific**, and the user’s message is an **action request** or imperative—not only thread drafting or tone/style tweaks.
 
 Typical phrasing includes things like: create or update a ticket (e.g. Jira), send a DM or channel message for them, schedule or cancel something, run a lookup and act on the result, file a doc, post an update, remind someone, or “do X on my behalf.”
 
@@ -15,4 +15,4 @@ Typical phrasing includes things like: create or update a ticket (e.g. Jira), se
 3. **Confirm when policies require it** — If the stack uses confirmation flows for destructive or sensitive actions, follow those; otherwise execute.
 4. **Slack-specific** — When the outcome is a Slack message, use the appropriate send/post tools for the context (thread vs DM vs channel) and respect existing confirmation patterns for posting on behalf of the user.
 
-If the user only wants wording for a reply with no separate side-effect (no ticket, no DM, no external system), prefer **`draft_thread_reply`** or another specialized reply skill instead of this one.
+If the user only wants wording for a reply with no separate side-effect (no ticket, no DM, no external system), prefer **`draft_thread_reply`** or another specialized skill instead of this one.

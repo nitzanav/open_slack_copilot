@@ -6,26 +6,25 @@ from common.log import log
 from common.llm.llm_client import llm_client
 
 SKILLS_ROOT = Path.home() / ".open_slack_copilot" / "skills"
-_SKILL_KINDS = ("reply", "watcher")
-# Reply skill folder name: one path segment, letters, underscore, hyphen.
-_REPLY_SKILL_FOLDER_NAME_RE = re.compile(r"^[a-zA-Z_-]+\Z")
-_BUNDLED_DEFAULT_INSTRUCTION = (Path(__file__).parent / "default_reply_instruction.md").read_text().strip()
-USER_DEFAULT_INSTRUCTION_PATH = Path.home() / ".open_slack_copilot" / "skills" / "reply" / "default.md"
+# Skill folder name: one path segment, letters, underscore, hyphen.
+_SKILL_FOLDER_NAME_RE = re.compile(r"^[a-zA-Z_-]+\Z")
+_BUNDLED_DEFAULT_INSTRUCTION = (Path(__file__).parent / "default_instruction.md").read_text().strip()
+USER_DEFAULT_INSTRUCTION_PATH = Path.home() / ".open_slack_copilot" / "skills" / "default.md"
 
 SELECTION_PROMPT = (
     "You are selecting relevant skills for drafting a Slack reply.\n"
     "Given the thread context and available skills, return a JSON array of "
     "skill references that are relevant. Return [] if none match.\n"
-    "Each reference must be exactly as listed (kind/name).\n\n"
+    "Each reference must be exactly as listed (skill folder name).\n\n"
     "Available skills:\n{skill_list}\n\n"
     "Thread context:\n{thread_context}\n\n"
-    "Return ONLY a JSON array, e.g. [\"reply/polite_reply\", \"watcher/checklist\"]"
+    'Return ONLY a JSON array, e.g. ["polite_reply", "follow_up"]'
 )
 
 
 @log
-def select_skills(skill_type: str, thread_messages: list[dict], user_text: str) -> list[str]:
-    entries = _skill_entries_for_kind(skill_type)
+def select_skills(thread_messages: list[dict], user_text: str) -> list[str]:
+    entries = _skill_entries()
     if not entries:
         return []
 
@@ -39,30 +38,29 @@ def select_skills(skill_type: str, thread_messages: list[dict], user_text: str) 
     return [text for ref, text in entries if ref in selected_refs]
 
 
-def is_safe_reply_skill_folder_name(name: str) -> bool:
-    """True when ``name`` is a single safe folder segment (``skills/reply/<name>/``)."""
+def is_safe_skill_folder_name(name: str) -> bool:
+    """True when ``name`` is a single safe folder segment (``skills/<name>/``)."""
     n = (name or "").strip()
-    return bool(n) and _REPLY_SKILL_FOLDER_NAME_RE.match(n) is not None
+    return bool(n) and _SKILL_FOLDER_NAME_RE.match(n) is not None
 
 
-def load_forced_reply_skill(skill_folder: str) -> tuple[str, str] | None:
-    """Load ``reply/<skill_folder>/SKILL.md`` when present."""
+def load_forced_skill(skill_folder: str) -> tuple[str, str] | None:
+    """Load ``<skill_folder>/SKILL.md`` when present."""
     cid = (skill_folder or "").strip()
-    if not is_safe_reply_skill_folder_name(cid):
+    if not is_safe_skill_folder_name(cid):
         return None
-    d = SKILLS_ROOT / "reply" / cid
+    d = SKILLS_ROOT / cid
     if not d.is_dir() or not (d / "SKILL.md").is_file():
         return None
-    ref = f"reply/{cid}"
     skill_text = (d / "SKILL.md").read_text().strip()
-    return ref, skill_text
+    return cid, skill_text
 
 
-def reply_skill_display_name(skill_folder: str, skill_text: str | None = None) -> str:
+def skill_display_name(skill_folder: str, skill_text: str | None = None) -> str:
     """Human title from SKILL.md ``# Heading`` or the folder name."""
     text = skill_text
     if text is None:
-        loaded = load_forced_reply_skill(skill_folder)
+        loaded = load_forced_skill(skill_folder)
         if loaded is None:
             return (skill_folder or "").strip() or "unknown"
         _, text = loaded
@@ -79,16 +77,13 @@ def get_default_instruction() -> str:
     return _BUNDLED_DEFAULT_INSTRUCTION
 
 
-def _skill_entries_for_kind(kind: str) -> list[tuple[str, str]]:
-    if kind not in _SKILL_KINDS:
-        return []
-    base = SKILLS_ROOT / kind
-    if not base.is_dir():
+def _skill_entries() -> list[tuple[str, str]]:
+    if not SKILLS_ROOT.is_dir():
         return []
     out: list[tuple[str, str]] = []
-    for d in base.iterdir():
+    for d in SKILLS_ROOT.iterdir():
         if d.is_dir() and (d / "SKILL.md").is_file():
-            out.append((f"{kind}/{d.name}", (d / "SKILL.md").read_text().strip()))
+            out.append((d.name, (d / "SKILL.md").read_text().strip()))
     return out
 
 

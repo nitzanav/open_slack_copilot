@@ -9,7 +9,7 @@ from collections.abc import Callable
 from common.log import log
 from common.llm.llm_client.llm_client import AgentEvent, ToolCallRecord
 from common.slack.copilot_pipeline import (
-    ForcedReplySkillMissing,
+    ForcedSkillMissing,
     ReactLoopResult,
     ThreadFetchError,
     fetch_channel_tail_messages,
@@ -197,7 +197,8 @@ def run_react_and_confirm(
     tool_dispatch: Callable[[str, str], str] | None = None,
     copilot_trigger: str | None = None,
     copilot_action: str | None = None,
-    forced_reply_skill_folder: str | None = None,
+    forced_skill_folder: str | None = None,
+    anchor_message_text: str | None = None,
 ) -> None:
     if not recipient_user_id:
         return
@@ -224,10 +225,11 @@ def run_react_and_confirm(
             copilot_trigger=copilot_trigger,
             copilot_action=copilot_action,
             context_kind=context_kind,
-            forced_reply_skill_folder=forced_reply_skill_folder,
+            forced_skill_folder=forced_skill_folder,
+            anchor_message_text=anchor_message_text,
             on_agent_event=on_ev,
         )
-    except ForcedReplySkillMissing:
+    except ForcedSkillMissing:
         return
     except ThreadFetchError:
         copilot_user_notify.notify_error(

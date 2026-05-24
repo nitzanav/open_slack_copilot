@@ -21,7 +21,7 @@ C_TEST = "C0ALHSXRDU5"
 U_USER1 = "U0AMFJ2AVME"
 U_ALICE = "U_ALICE_E2E"
 TS_ROOT = "1779450059.378599"
-SKILL_ID = "reply/general_instruction"
+SKILL_ID = "general_instruction"
 
 _e2e_log = get_test_logger("e2e")
 
@@ -68,7 +68,6 @@ def build_directory_rag_e2e_context() -> DirectoryRagE2EContext:
     skill_text = (
         Path(__file__).resolve().parents[2]
         / "skill_examples"
-        / "reply"
         / "general_instruction"
         / "SKILL.md"
     ).read_text()

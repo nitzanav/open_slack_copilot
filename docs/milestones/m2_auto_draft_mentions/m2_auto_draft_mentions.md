@@ -37,7 +37,7 @@ slack_listener_with_threads.py ─ app_mention event
 mention_handler.py
        │
        ├── slack_api.read_thread(channel_id, thread_ts)
-       ├── progressive_disclosure.select_skills("reply", thread_messages)
+       ├── progressive_disclosure.select_skills(thread_messages)
        ├── prepare_draft_order(thread_messages, user_text="", skills)
        │         ├── (includes RAG if available from M1.3/M1.4)
        │         ├── llm_client.generate(prompt)
@@ -122,7 +122,7 @@ common/slack/slack_bot/
 
 - **test_mention_triggers_draft** — simulate `app_mention` event for configured user, assert `prepare_draft_order` called
 - **test_wrong_user_ignored** — simulate `app_mention` for a different user, assert no draft generated
-- **test_uses_reply_skills** — assert `progressive_disclosure.select_skills("reply", ...)` called
+- **test_uses_skills** — assert `progressive_disclosure.select_skills(...)` called
 - **test_default_fallback** — mock progressive disclosure returning empty, assert hardcoded default instruction from codebase loaded
 - **test_ephemeral_sent_to_configured_user** — assert `send_ephemeral` called with configured user ID
 - **test_no_user_text** — assert `prepare_draft_order` called with `user_text=""`
