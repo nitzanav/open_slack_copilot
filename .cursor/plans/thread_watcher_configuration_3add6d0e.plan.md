@@ -264,7 +264,7 @@ flowchart TD
 
 - **Trigger = sign-of-online**: any successful tool confirmation in Slack indicates the copilot user is online; that's the only event that wakes watchers in v1.
 - **No recursion guard**: watcher-initiated runs that get tool-confirmed are equally valid online signals; per-thread re-firing is prevented by the `skill_didnt_run_for` filter.
-- **Per-thread iteration**: `iter_recent_thread_ids` yields one entry per distinct `thread_ts`, so the filter chain is evaluated per thread, never per message.
+- **Per-thread iteration**: `iter_recent_thread_ids` yields one entry per channel-history message (i.e. one per thread root), so the filter chain is evaluated per thread, never per reply.
 - **Asynchronous dispatch**: the Slack confirmation handler MUST NOT block. Dispatch only enqueues a Huey task on the SQLite queue at `~/.open_slack_copilot/huey.sqlite3`; the watcher loop runs in a separate `huey_consumer` process (`make watcher_worker`).
 - **Burst dedup**: `@huey.lock_task("watchers")` ensures at most one `run_all_watchers` execution at a time; concurrent enqueues are dropped by Huey, replacing hand-rolled coalescing.
 - **Single task for all watchers**: one `run_all_watchers` task iterates `load_all()`; per-watcher errors caught locally so one bad config does not skip the others.
