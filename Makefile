@@ -2,7 +2,8 @@
 	rag-inspect-all-channels rag-inspect-channel rag-inspect-all \
 	rag-inspect-collection rag-list-collections rag-help \
 	rag-clean rag-clean-dry-run \
-	scheduled_prompts_list scheduled_prompts_clear
+	scheduled_prompts_list scheduled_prompts_clear \
+	watcher_worker watchers_list watchers_run_once
 
 PYTHON ?= python3
 PY := .venv/bin/python
@@ -115,3 +116,17 @@ scheduled_prompts_list: install
 
 scheduled_prompts_clear: install
 	PYTHONPATH=. $(PY) -c "from common.tools.prompt_scheduler.prompt_scheduler import clear_all_scheduled_prompt_jobs; clear_all_scheduled_prompt_jobs()"
+
+# --- Watchers: per-channel JSON configs (settings.watchers.storage_path) ---
+# Consumer reads tasks from the shared SQLite-backed Huey queue
+# (settings.task_queue.db_path). `common.watchers.watchers` re-exports the
+# `huey` instance and registers run_all_watchers on import.
+
+watcher_worker: install
+	PYTHONPATH=. .venv/bin/huey_consumer common.watchers.watchers.huey
+
+watchers_list: install
+	PYTHONPATH=. $(PY) -m common.watchers.cli list
+
+watchers_run_once: install
+	PYTHONPATH=. $(PY) -m common.watchers.cli run_once

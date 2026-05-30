@@ -75,3 +75,16 @@ class FileKeyValueCollection(KeyValueCollection):
             p.stem for p in self._root.iterdir()
             if p.suffix == ".json" and p.is_file()
         )
+
+    def values(self) -> list[dict[str, Any]]:
+        if not self._root.is_dir():
+            return []
+        out: list[dict[str, Any]] = []
+        for p in self._root.iterdir():
+            if p.suffix != ".json" or not p.is_file():
+                continue
+            try:
+                out.append(json.loads(p.read_text(encoding="utf-8")))
+            except (OSError, json.JSONDecodeError):
+                continue
+        return out

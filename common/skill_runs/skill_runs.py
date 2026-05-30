@@ -74,6 +74,19 @@ def get_payload(key: str) -> dict[str, Any]:
     return p if isinstance(p, dict) else {}
 
 
+def find_latest_run(
+    skill_id: str, channel_id: str, thread_ts: str,
+) -> dict[str, Any] | None:
+    """Most recent run row for ``(skill_id, channel_id, thread_ts)`` by ``action_ts``."""
+    rows = (
+        r for r in _collection().values()
+        if r.get("skill_id") == skill_id
+        and r.get("channel_id") == channel_id
+        and r.get("thread_ts") == thread_ts
+    )
+    return max(rows, key=lambda r: r.get("action_ts") or "", default=None)
+
+
 def get_skill_id(key: str) -> str | None:
     row = _collection().get(key) or {}
     sid = row.get("skill_id")
