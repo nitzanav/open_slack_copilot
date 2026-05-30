@@ -1,4 +1,18 @@
-"""Per-channel watcher config: parse + validate raw dict from ``<name>.json``."""
+"""Per-channel watcher config: parse + validate raw dict from ``<name>.json``.
+
+Example use case — "summarize active threads in #design":
+
+    {
+        "trigger": "any_tool_confirmation",
+        "requester_user_id": "U123ABC",
+        "channel_id": "C0123ABC",
+        "run_skill_id": "summarize_thread",
+        "thread_started_after": 604800,
+        "skill_didnt_run_for": 7200,
+        "thread_had_more_than_x_messages_since_last_skill_run": 3,
+        "thread_quiet_for_x_seconds": 3600
+    }
+"""
 
 from __future__ import annotations
 
@@ -16,9 +30,24 @@ class WatcherConfig:
     requester_user_id: str
     channel_id: str
     run_skill_id: str
+
+    # Only look at threads whose root message is within the last N seconds.
+    # e.g. 604800 = 1 week → ignore stale threads.
     thread_started_after: int
+
+    # Filters (cheapest first). All must pass for the skill to fire on a thread.
+
+    # Skip if the same skill already ran on this thread within the last N seconds.
+    # e.g. 7200 = 2h → no point summarizing again every 2 hours.
     skill_didnt_run_for: int
+
+    # Skip unless the thread accumulated more than N messages since the last
+    # skill run (or N+ messages total when there is no prior run).
+    # e.g. 3 → no point summarizing again after only 2 new messages.
     thread_had_more_than_x_messages_since_last_skill_run: int
+
+    # Skip if the most recent message is newer than N seconds (thread is hot).
+    # e.g. 3600 = 1h → let people finish chatting before summarizing.
     thread_quiet_for_x_seconds: int
 
 
