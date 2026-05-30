@@ -81,7 +81,7 @@ def _passes_filters(cfg: WatcherConfig, thread_ts: str) -> bool:
     messages = slack_api.read_thread(cfg.channel_id, thread_ts)
     if not _passes_messages_since_last_run(cfg, messages, last_run_ts):
         return False
-    if not _passes_thread_quiet(cfg, messages):
+    if not _passes_thread_quiet_longer_than(cfg, messages):
         return False
     return True
 
@@ -119,7 +119,7 @@ def _count_messages_since(
     return sum(1 for m in messages if _msg_epoch(m) > last_run_ts)
 
 
-def _passes_thread_quiet(
+def _passes_thread_quiet_longer_than(
     cfg: WatcherConfig, messages: list[dict[str, Any]],
 ) -> bool:
     last_msg_ts = _last_message_epoch(messages)
