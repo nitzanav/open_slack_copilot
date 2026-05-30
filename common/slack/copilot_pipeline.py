@@ -179,6 +179,15 @@ def run_react_loop(
             raise ForcedSkillMissing
         skill_id, forced_text = selected
         skills = [forced_text]
+        try:
+            copilot_user_notify.notify_progress(
+                channel_id,
+                thread_ts,
+                user_id,
+                f"Using skill: {progressive_disclosure.skill_display_name(forced_skill_folder, forced_text)}",
+            )
+        except Exception:
+            pass
     else:
         skills = select_skills(thread_messages, user_text)
     rag_query_text = build_rag_query_text(
