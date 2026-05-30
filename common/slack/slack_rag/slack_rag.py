@@ -1,9 +1,12 @@
 import time
 import threading
+from typing import Callable
 
 from common.rag import rag
 from common.slack.slack_api import slack_api
 from common.slack.thread_format import format_rag_hits_for_prompt
+
+IndicationCallback = Callable[[str], None]
 
 _last_indexed_ts: dict[str, str] = {}
 _scheduler_threads: list[threading.Thread] = []
@@ -29,6 +32,25 @@ def query_cross_channel(channel_ids: list[str], thread_context: str,
         all_results.extend(results)
 
     return _deduplicate_and_rank(all_results, thread_context, top_k)
+
+
+def ensure_built_and_query_cross_channel(
+    channel_ids: list[str],
+    query_text: str,
+    *,
+    exclude_channel: str | None = None,
+    top_k: int = 10,
+    checkpoint_seconds: float = 30 * 86400,
+    indication_callback: IndicationCallback | None = None,
+) -> list[dict]:
+    missing = missing_channels(channel_ids)
+    if missing and indication_callback:
+        indication_callback(f"Creating RAG for {', '.join(missing)}, please wait.")
+    for ch in missing:
+        build(ch, checkpoint_seconds)
+    return query_cross_channel(
+        channel_ids, query_text, exclude_channel=exclude_channel, top_k=top_k,
+    )
 
 
 def build(channel_id: str, checkpoint_seconds: float = 30 * 86400):

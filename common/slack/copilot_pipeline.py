@@ -20,6 +20,7 @@ from common.tools.append_csv_row import APPEND_CSV_ROW_TOOL
 from common.tools.copilot_tool import dispatch_copilot_tool as dispatch_registered_copilot_tool
 from common.tools.list_usergroup_members import LIST_USERGROUP_MEMBERS_TOOL
 from common.tools.list_users import LIST_USERS_TOOL
+from common.tools.rag_slack_search import RAG_SLACK_SEARCH_TOOL
 from common.tools.schedule_tool import SCHEDULE_PROMPT_TOOL
 from common.tools.send_ephemeral_message import SEND_EPHEMERAL_MESSAGE_TOOL
 from common.tools.send_dm_as_app import SEND_DM_AS_APP_TOOL
@@ -43,6 +44,7 @@ _INTERACTIVE_TOOLS = [
     LIST_USERGROUP_MEMBERS_TOOL,
     LIST_USERS_TOOL,
     APPEND_CSV_ROW_TOOL,
+    RAG_SLACK_SEARCH_TOOL,
 ]
 
 
@@ -439,19 +441,14 @@ def fetch_cross_channel_rag(
     cross_channels = get_cross_channel_ids()
     if not cross_channels:
         return []
+    def notify(text: str) -> None:
+        copilot_user_notify.notify_progress(channel_id, thread_ts, user_id, text)
     try:
-        missing = slack_rag.missing_channels(cross_channels)
-        if missing:
-            names = ", ".join(missing)
-            copilot_user_notify.notify_progress(
-                channel_id, thread_ts, user_id,
-                f"Creating RAG for {names}, please wait.",
-            )
-            checkpoint = get_checkpoint_seconds()
-            for ch in missing:
-                slack_rag.build(ch, checkpoint)
-        return slack_rag.query_cross_channel(
-            cross_channels, rag_query_text, exclude_channel=channel_id
+        return slack_rag.ensure_built_and_query_cross_channel(
+            cross_channels, rag_query_text,
+            exclude_channel=channel_id,
+            checkpoint_seconds=get_checkpoint_seconds(),
+            indication_callback=notify,
         )
     except Exception:
         return []
@@ -466,7 +463,6 @@ def load_examples() -> list[dict]:
 def get_checkpoint_seconds() -> float:
     return parse_duration_seconds(settings.rag.checkpoint_duration)
 
-# TODO: should be part of slack_rag.py
 def get_cross_channel_ids() -> list[str]:
     return list(settings.rag.cross_channel)
 
