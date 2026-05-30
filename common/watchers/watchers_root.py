@@ -7,12 +7,13 @@ import logging
 from pathlib import Path
 
 from common.watchers.watcher_config import WatcherConfig, validate_watcher_config
+from config.config import settings
 
 _logger = logging.getLogger(__name__)
 
 
 def watchers_root() -> Path:
-    return Path.home() / ".open_slack_copilot" / "watchers"
+    return Path(settings.watchers.storage_path).expanduser()
 
 
 def load_all() -> list[WatcherConfig]:

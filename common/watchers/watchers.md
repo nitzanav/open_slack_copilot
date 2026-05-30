@@ -2,8 +2,9 @@
 
 Per-channel JSON configs that pick **one** eligible thread per Slack tool confirmation and run a forced skill on it.
 
-## **Configs** — `~/.open_slack_copilot/watchers/<name>.json`
+## **Configs** — `<watchers.storage_path>/<name>.json`
 
+- Root path from `settings.watchers.storage_path` (default `~/.open_slack_copilot/watchers`)
 - Schema: see [`watcher_config.py`](watcher_config.py)
 - `trigger` must be `any_tool_confirmation` (only supported value)
 - Invalid files are logged and skipped on load
@@ -15,7 +16,7 @@ Per-channel JSON configs that pick **one** eligible thread per Slack tool confir
 
 ## **Background runner** — Huey + SQLite, one task for all watchers
 
-- App: [`huey_app.py`](huey_app.py) at `~/.open_slack_copilot/huey.sqlite3`
+- App: [`huey_app.py`](huey_app.py) at `settings.watchers.huey_db_path` (default `~/.open_slack_copilot/huey.sqlite3`)
 - Task: `run_all_watchers` in [`watchers.py`](watchers.py)
 - `@huey.lock_task("watchers")` collapses concurrent enqueues into one run
 
