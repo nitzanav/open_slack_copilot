@@ -11,7 +11,7 @@ from common.date_utils import parse_iso_datetime
 from common.skill_runs import skill_runs
 from common.slack.slack_api import slack_api
 from common.watchers.eligible_thread_finder import iter_recent_thread_ids
-from common.watchers.huey_app import huey
+from common.task_queue.huey_app import huey
 from common.watchers.watcher_config import SUPPORTED_TRIGGER, WatcherConfig
 from common.watchers.watchers_root import load_all
 

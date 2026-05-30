@@ -117,9 +117,10 @@ scheduled_prompts_list: install
 scheduled_prompts_clear: install
 	PYTHONPATH=. $(PY) -c "from common.tools.prompt_scheduler.prompt_scheduler import clear_all_scheduled_prompt_jobs; clear_all_scheduled_prompt_jobs()"
 
-# --- Watchers: per-channel JSON configs under ~/.open_slack_copilot/watchers/ ---
-# Consumer reads tasks from huey.sqlite3; `watchers.huey` re-exports the SqliteHuey
-# instance so importing it also registers run_all_watchers.
+# --- Watchers: per-channel JSON configs (settings.watchers.storage_path) ---
+# Consumer reads tasks from the shared SQLite-backed Huey queue
+# (settings.task_queue.db_path). `common.watchers.watchers` re-exports the
+# `huey` instance and registers run_all_watchers on import.
 
 watcher_worker: install
 	PYTHONPATH=. .venv/bin/huey_consumer common.watchers.watchers.huey

@@ -18,11 +18,11 @@ todos:
     content: Implement three filter checks + run_react_and_confirm dispatch in common/watchers/watchers.py
     status: pending
   - id: huey_app
-    content: Add common/watchers/huey_app.py - SqliteHuey instance at ~/.open_slack_copilot/huey.sqlite3; add huey to requirements.txt
+    content: Add common/task_queue/huey_app.py - shared SqliteHuey instance (path from settings.task_queue.db_path); add huey to requirements.txt
   - id: hook
     content: Hook dispatch_watchers_async in tool_confirmation.handle_confirm_action; enqueues the single run_all_watchers Huey task (non-blocking; lock_task dedupes bursts)
   - id: watcher_consumer
-    content: Wire `run_all_watchers` task with @huey.lock_task('watchers'); Makefile target `watcher_worker` runs `huey_consumer common.watchers.huey_app.huey`
+    content: Wire `run_all_watchers` task with @huey.lock_task('watchers'); Makefile target `watcher_worker` runs `huey_consumer common.watchers.watchers.huey`
     status: pending
   - id: cli
     content: Add watchers_list and watchers_run_once make targets + entry points
@@ -156,28 +156,29 @@ watchers.dispatch_watchers_async("any_tool_confirmation")
 - Already a small dependency; no Redis/broker needed.
 - APScheduler stays in [prompt_scheduler](common/tools/prompt_scheduler/prompt_scheduler.py) for cron (same-process). Watchers use Huey for cross-process queueing.
 
-### Huey app
+### Huey app (generic, not watcher-specific)
 
-New file [common/watchers/huey_app.py](common/watchers/huey_app.py):
+New file [common/task_queue/huey_app.py](common/task_queue/huey_app.py) — shared task-queue infrastructure that any feature can import:
 
 ```python
 from pathlib import Path
 from huey import SqliteHuey
+from config.config import settings
 
-_HUEY_DB = Path.home() / ".open_slack_copilot" / "huey.sqlite3"
+_HUEY_DB = Path(settings.task_queue.db_path).expanduser()
 _HUEY_DB.parent.mkdir(parents=True, exist_ok=True)
 
 huey = SqliteHuey(name="open_slack_copilot", filename=str(_HUEY_DB))
 ```
 
-The same Huey instance is imported by both the bot process (producer) and the consumer process. SQLite locking handles concurrent producers; the consumer process is the single executor.
+DB path comes from `settings.task_queue.db_path` (default `~/.open_slack_copilot/huey.sqlite3`). The same Huey instance is imported by both the bot process (producer) and the consumer process. SQLite locking handles concurrent producers; the consumer process is the single executor.
 
 ### Single task for ALL watchers
 
 In [common/watchers/watchers.py](common/watchers/watchers.py):
 
 ```python
-from common.watchers.huey_app import huey
+from common.task_queue.huey_app import huey
 
 @huey.task()
 @huey.lock_task("watchers")  # only one run_all_watchers in flight at a time
@@ -205,12 +206,9 @@ The consumer is just the standard Huey CLI — no custom worker file:
 
 - `make watcher_worker` runs:
   ```
-  PYTHONPATH=. .venv/bin/huey_consumer common.watchers.huey_app.huey
+  PYTHONPATH=. .venv/bin/huey_consumer common.watchers.watchers.huey
   ```
-- Importing `common.watchers.huey_app` triggers `import common.watchers.watchers`, which registers the `run_all_watchers` task with the shared `huey` instance. Add an explicit re-export in `huey_app.py` if needed to guarantee task registration:
-  ```python
-  from common.watchers.watchers import run_all_watchers  # noqa: F401  (register task)
-  ```
+- The consumer imports `common.watchers.watchers`, which (a) re-exports the shared `huey` instance via `from common.task_queue.huey_app import huey`, and (b) registers the `run_all_watchers` task via the `@huey.task()` decorator at import time. No extra wiring is needed.
 
 Makefile targets (parity with `scheduled_prompts`):
 

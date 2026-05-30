@@ -16,7 +16,7 @@ Per-channel JSON configs that pick **one** eligible thread per Slack tool confir
 
 ## **Background runner** — Huey + SQLite, one task for all watchers
 
-- App: [`huey_app.py`](huey_app.py) at `settings.watchers.huey_db_path` (default `~/.open_slack_copilot/huey.sqlite3`)
+- Shared `huey` instance from [`common.task_queue.huey_app`](../task_queue/huey_app.py) (DB path: `settings.task_queue.db_path`)
 - Task: `run_all_watchers` in [`watchers.py`](watchers.py)
 - `@huey.lock_task("watchers")` collapses concurrent enqueues into one run
 
