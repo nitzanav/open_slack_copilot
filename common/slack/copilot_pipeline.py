@@ -457,7 +457,7 @@ def load_examples() -> list[dict]:
 def get_checkpoint_seconds() -> float:
     return parse_duration_seconds(settings.rag.checkpoint_duration)
 
-
+# TODO: should be part of slack_rag.py
 def get_cross_channel_ids() -> list[str]:
     return list(settings.rag.cross_channel)
 
