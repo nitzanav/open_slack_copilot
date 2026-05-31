@@ -11,6 +11,7 @@ from common.slack.slack_api import oauth_token_store
 
 from common.cache import cache
 from common.log import log
+from common.slack.mrkdwn_convert import to_slack_mrkdwn
 from config.config import settings
 
 _client: WebClient | None = None
@@ -121,7 +122,7 @@ def send_dm(user_id: str, text: str):
     client = get_client()
     conv = client.conversations_open(users=user_id)
     ch = conv["channel"]["id"]
-    client.chat_postMessage(channel=ch, text=text, mrkdwn=True)
+    client.chat_postMessage(channel=ch, text=to_slack_mrkdwn(text), mrkdwn=True)
 
 
 @log
@@ -137,7 +138,7 @@ def send_dm_on_behalf_of_requester(
     client = WebClient(token=token, ssl=_ssl_context())
     conv = client.conversations_open(users=target_user_id)
     ch = conv["channel"]["id"]
-    client.chat_postMessage(channel=ch, text=text, mrkdwn=True)
+    client.chat_postMessage(channel=ch, text=to_slack_mrkdwn(text), mrkdwn=True)
 
 
 @log
@@ -146,7 +147,7 @@ def post_thread_message_as_app(channel_id: str, thread_ts: str, text: str) -> No
     get_client().chat_postMessage(
         channel=channel_id,
         thread_ts=thread_ts,
-        text=text,
+        text=to_slack_mrkdwn(text),
         mrkdwn=True,
     )
 
@@ -166,7 +167,7 @@ def post_thread_message_on_behalf_of_requester(
     client.chat_postMessage(
         channel=channel_id,
         thread_ts=thread_ts,
-        text=text,
+        text=to_slack_mrkdwn(text),
         mrkdwn=True,
     )
 

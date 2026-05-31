@@ -81,6 +81,12 @@ def test_body_blocks_use_mrkdwn_for_mentions():
     assert "<@U0ALHV1GDDK>" in (body.get("text") or {}).get("text", "")
 
 
+def test_body_blocks_convert_github_bold_to_slack_mrkdwn():
+    blocks = _sample_blocks("**Merchant name:** acme")
+    body = next(b for b in blocks if str(b.get("block_id", "")).startswith(tc.BLOCK_BODY_PREFIX))
+    assert (body.get("text") or {}).get("text") == "*Merchant name:* acme"
+
+
 def test_build_blocks_rejects_overflow():
     spec = get_tool_confirmation_spec("send_dm_as_app")
     assert spec is not None

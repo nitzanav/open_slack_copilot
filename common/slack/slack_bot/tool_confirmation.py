@@ -12,6 +12,7 @@ from slack_bolt import App
 
 from common.log import log
 from common.slack import copilot_user_notify
+from common.slack.mrkdwn_convert import to_slack_mrkdwn
 from common.slack.slack_api import slack_api
 from common.tools.copilot_tool import (
     ToolConfirmationSpec,
@@ -118,7 +119,8 @@ def _build_confirmation_blocks(
     text_content: str,
     payload: dict[str, Any],
 ) -> list[dict]:
-    body = _message_body_blocks(text_content)
+    formatted = to_slack_mrkdwn(text_content)
+    body = _message_body_blocks(formatted)
     return [
         {
             "type": "section",
@@ -127,7 +129,7 @@ def _build_confirmation_blocks(
         },
         *_extra_params_section(spec, payload),
         *body,
-        _actions_block(tool_name, spec, payload, text_content),
+        _actions_block(tool_name, spec, payload, formatted),
     ]
 
 
