@@ -33,6 +33,15 @@ scheduled_prompts:
   max_expiry_days: 14
   default_expiry_days: 7
 
+watchers:
+  # Per-channel watcher JSON configs (see common/watchers/watcher_config.py).
+  storage_path: "~/.open_slack_copilot/watchers"
+
+# Generic background task queue (Huey + SQLite). Shared by any feature that
+# needs durable, cross-process job dispatch (e.g. watchers).
+task_queue:
+  db_path: "~/.open_slack_copilot/huey.sqlite3"
+
 llm:
   # Completion backend: openai (default) | anthropic (stub until implemented).
   provider: "openai"
