@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-from common.watchers.eligible_thread_finder import iter_recent_thread_ids
+from common.watchers.eligible_thread_finder import _slack_oldest_ts, iter_recent_thread_ids
 
 
 def _page(messages, cursor=None):
@@ -40,5 +40,10 @@ def test_passes_oldest_to_slack():
         list(iter_recent_thread_ids("C1", 12345.5))
     kwargs = client.conversations_history.call_args.kwargs
     assert kwargs["channel"] == "C1"
-    assert kwargs["oldest"] == "12345.5"
+    assert kwargs["oldest"] == "12345.500000"
     assert kwargs["limit"] == 200
+
+
+def test_slack_oldest_ts_avoids_float_string_noise():
+    assert _slack_oldest_ts(1779042892.281862) == "1779042892.281862"
+    assert _slack_oldest_ts(12345.5) == "12345.500000"

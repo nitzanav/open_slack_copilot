@@ -106,6 +106,18 @@ def test_passes_when_no_prior_run(monkeypatch):
         assert watchers._passes_filters(cfg, "100.0") is True
 
 
+def test_skipped_when_too_few_messages_and_no_prior_run(monkeypatch):
+    _patch_now(monkeypatch)
+    cfg = _cfg(
+        thread_had_more_than_x_messages_since_last_skill_run=3,
+        thread_quiet_for_x_seconds=300,
+    )
+    messages = [_msg(_FIXED_NOW - 1_000)]
+    with patch.object(watchers.skill_runs, "find_latest_run", return_value=None), \
+         patch.object(watchers.slack_api, "read_thread", return_value=messages):
+        assert watchers._passes_filters(cfg, "100.0") is False
+
+
 def test_skill_didnt_run_for_short_circuits_without_reading_thread(monkeypatch):
     _patch_now(monkeypatch)
     cfg = _cfg()

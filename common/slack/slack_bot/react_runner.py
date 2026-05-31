@@ -230,6 +230,12 @@ def run_react_and_confirm(
             on_agent_event=on_ev,
         )
     except ForcedSkillMissing:
+        if copilot_trigger == "watcher":
+            _logger.warning(
+                "watcher skill missing: %s (need ~/.open_slack_copilot/skills/%s/SKILL.md)",
+                forced_skill_folder,
+                forced_skill_folder,
+            )
         return
     except ThreadFetchError:
         copilot_user_notify.notify_error(

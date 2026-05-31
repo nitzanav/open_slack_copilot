@@ -23,7 +23,7 @@ Per-channel JSON configs that pick **one** eligible thread per Slack tool confir
 ## **Filter chain (cheapest first)** — per distinct `thread_ts`
 
 1. `skill_didnt_run_for` — check `skill_runs.find_latest_run`; reject without reading the thread
-2. `thread_had_more_than_x_messages_since_last_skill_run` — fetch via `read_thread`, count messages since last run
+2. `thread_had_more_than_x_messages_since_last_skill_run` — fetch via `read_thread`, count messages since last run (or total when there is no prior run)
 3. `thread_quiet_for_x_seconds` — last message age from the same fetched thread
 
 ## **Dispatch** — `run_react_and_confirm(forced_skill_folder=cfg.run_skill_id)`

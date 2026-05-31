@@ -123,7 +123,7 @@ scheduled_prompts_clear: install
 # `huey` instance and registers run_all_watchers on import.
 
 watcher_worker: install
-	PYTHONPATH=. .venv/bin/huey_consumer common.watchers.watchers.huey
+	PYTHONPATH=. .venv/bin/huey_consumer -S common.watchers.watchers.huey
 
 watchers_list: install
 	PYTHONPATH=. $(PY) -m common.watchers.cli list
