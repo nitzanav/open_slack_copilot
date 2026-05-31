@@ -123,6 +123,30 @@ def test_handle_confirm_action_uses_draft_ref_when_blocks_missing():
         api.send_dm.assert_called_once_with("U_RECIPIENT", "draft body")
 
 
+def test_handle_confirm_action_signals_watchers():
+    payload = {
+        "target_user_id": "U_RECIPIENT",
+        "channel_id": "C1",
+        "thread_ts": "1.0",
+        "prepare_user_id": "U_PREP",
+    }
+    blocks = _sample_blocks("body text", payload)
+    actions = blocks[-1]["elements"]
+    confirm_value = next(
+        e["value"] for e in actions if e["action_id"] == tc.ACTION_TOOL_CONFIRM
+    )
+    body = {
+        "user": {"id": "U_CLICKER"},
+        "channel": {"id": "C1"},
+        "actions": [{"value": confirm_value}],
+        "message": {"blocks": blocks, "thread_ts": "1.0"},
+    }
+    with patch("common.tools.send_dm_as_app.slack_api"), \
+         patch("common.watchers.watchers.dispatch_watchers_async") as dispatch:
+        tc.handle_confirm_action(body)
+        dispatch.assert_called_once_with("any_tool_confirmation")
+
+
 def test_handle_confirm_action_parses_and_sends():
     payload = {
         "target_user_id": "U_RECIPIENT",

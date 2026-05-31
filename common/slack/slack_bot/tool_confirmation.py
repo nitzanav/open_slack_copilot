@@ -337,7 +337,18 @@ def handle_confirm_action(body: dict) -> str:
     payload = meta.get("payload")
     if not isinstance(payload, dict):
         payload = {}
-    return _execute_confirmed_tool(tool_name, text, payload)
+    result = _execute_confirmed_tool(tool_name, text, payload)
+    _signal_copilot_online_for_watchers()
+    return result
+
+
+def _signal_copilot_online_for_watchers() -> None:
+    """Tool confirmation = copilot user is online; wake watchers (non-blocking)."""
+    try:
+        from common.watchers import watchers
+        watchers.dispatch_watchers_async("any_tool_confirmation")
+    except Exception:
+        pass
 
 
 def _execute_confirmed_tool(tool_name: str, text: str, payload: dict[str, Any]) -> str:

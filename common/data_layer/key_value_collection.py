@@ -24,3 +24,7 @@ class KeyValueCollection(ABC):
     @abstractmethod
     def list_keys(self) -> list[str]:
         """Return keys in this collection (file stems, no extension)."""
+
+    @abstractmethod
+    def values(self) -> list[dict[str, Any]]:
+        """Return all stored values (rows). Order is unspecified."""
