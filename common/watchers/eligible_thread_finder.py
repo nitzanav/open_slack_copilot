@@ -12,16 +12,26 @@ def _slack_oldest_ts(oldest: float) -> str:
     return f"{oldest:.6f}"
 
 
+def _thread_root_ts(message: dict) -> str:
+    """Root ``thread_ts`` for a channel-history row (root post uses ``ts``)."""
+    return (message.get("thread_ts") or message.get("ts") or "").strip()
+
+
 def iter_recent_thread_ids(channel_id: str, oldest: float) -> Iterator[str]:
-    """Yield each channel-history ``ts`` (thread root) with ts >= ``oldest``."""
+    """Yield distinct thread root ids from ``conversations.history`` (newest first)."""
     oldest_param = _slack_oldest_ts(oldest)
+    seen: set[str] = set()
     cursor: str | None = None
     while True:
         kwargs: dict = {"channel": channel_id, "oldest": oldest_param, "limit": 200}
         if cursor:
             kwargs["cursor"] = cursor
         res = slack_api.get_client().conversations_history(**kwargs)
-        yield from (m["ts"] for m in res.get("messages") or [])
+        for m in res.get("messages") or []:
+            root = _thread_root_ts(m)
+            if root and root not in seen:
+                seen.add(root)
+                yield root
         cursor = (res.get("response_metadata") or {}).get("next_cursor") or None
         if not cursor:
             return

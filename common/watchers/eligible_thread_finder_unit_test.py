@@ -10,7 +10,7 @@ def _page(messages, cursor=None):
     return res
 
 
-def test_yields_message_ts_in_channel_history_order():
+def test_yields_distinct_thread_roots_in_channel_history_order():
     client = MagicMock()
     client.conversations_history.return_value = _page([
         {"ts": "100.0"},
@@ -18,7 +18,7 @@ def test_yields_message_ts_in_channel_history_order():
         {"ts": "200.0"},
     ])
     with patch("common.watchers.eligible_thread_finder.slack_api.get_client", return_value=client):
-        assert list(iter_recent_thread_ids("C1", 0.0)) == ["100.0", "101.0", "200.0"]
+        assert list(iter_recent_thread_ids("C1", 0.0)) == ["100.0", "200.0"]
 
 
 def test_paginates_until_no_cursor():
